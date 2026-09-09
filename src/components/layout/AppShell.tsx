@@ -36,11 +36,12 @@ const ITEMS: Array<{
   etiqueta: string
   icono: typeof Package
   soloAdmin?: boolean
+  lecturaRegistrado?: boolean
 }> = [
-  { ruta: '/resumenes', etiqueta: 'Resúmenes', icono: ChartBar, soloAdmin: true },
+  { ruta: '/resumenes', etiqueta: 'Resúmenes', icono: ChartBar, lecturaRegistrado: true },
   { ruta: '/productos', etiqueta: 'Productos', icono: Package },
   { ruta: '/movimientos', etiqueta: 'Ingresos y egresos', icono: ArrowsLeftRight, soloAdmin: true },
-  { ruta: '/deudas', etiqueta: 'Deudas y pagos', icono: HandCoins, soloAdmin: true },
+  { ruta: '/deudas', etiqueta: 'Deudas y pagos', icono: HandCoins, lecturaRegistrado: true },
   { ruta: '/usuarios', etiqueta: 'Usuarios', icono: UserCircle, soloAdmin: true },
   { ruta: '/alertas', etiqueta: 'Alertas', icono: BellRinging, soloAdmin: true },
 ]
@@ -51,11 +52,12 @@ const HUB_MOVILES: Array<{
   etiqueta: string
   icono: typeof Package
   soloAdmin?: boolean
+  lecturaRegistrado?: boolean
 }> = [
-  { ruta: '/resumenes', etiqueta: 'Resumen', icono: ChartBar, soloAdmin: true },
+  { ruta: '/resumenes', etiqueta: 'Resumen', icono: ChartBar, lecturaRegistrado: true },
   { ruta: '/productos', etiqueta: 'Productos', icono: Package },
   { ruta: '/movimientos', etiqueta: 'Ingresos', icono: ArrowsLeftRight, soloAdmin: true },
-  { ruta: '/deudas', etiqueta: 'Deudas', icono: HandCoins, soloAdmin: true },
+  { ruta: '/deudas', etiqueta: 'Deudas', icono: HandCoins, lecturaRegistrado: true },
 ]
 
 /** Contenido de la barra lateral (compartido entre escritorio y modal móvil). */
@@ -86,8 +88,24 @@ export function AppShell() {
     }
   }
 
-  const itemsVisibles = ITEMS.filter((item) => !item.soloAdmin || esAdmin)
-  const hubMovilVisible = HUB_MOVILES.filter((item) => !item.soloAdmin || esAdmin)
+  const esVisible = (item: (typeof ITEMS)[number]) => {
+    if (esAdmin) return true
+    if (item.soloAdmin) return false
+    // El invitado (sin cuenta) solo puede consultar la tabla de productos.
+    if (!usuarioActivo) return item.ruta === '/productos'
+    return item.lecturaRegistrado ?? true
+  }
+
+  const itemsVisibles = ITEMS.filter(esVisible)
+  const hubMovilVisible = HUB_MOVILES.filter(esVisible)
+  const columnasHub =
+    hubMovilVisible.length === 4
+      ? 'grid-cols-4'
+      : hubMovilVisible.length === 3
+        ? 'grid-cols-3'
+        : hubMovilVisible.length === 2
+          ? 'grid-cols-2'
+          : 'grid-cols-1'
 
   const barraLateral = (cerrar: () => void) => (
     <div className="flex h-full flex-col bg-zinc-950">
@@ -246,7 +264,7 @@ export function AppShell() {
         aria-label="Navegación principal"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
-        <div className="grid grid-cols-4">
+        <div className={cn('grid', columnasHub)}>
           {hubMovilVisible.map((item) => (
             <NavLink
               key={item.ruta}

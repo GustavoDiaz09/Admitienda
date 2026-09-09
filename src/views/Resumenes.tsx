@@ -12,6 +12,8 @@ import {
 } from '@phosphor-icons/react'
 import { MovimientoController } from '../controller/MovimientoController'
 import { ProductoController } from '../controller/ProductoController'
+import { useSesionStore } from '../controller/SessionController'
+import { TIPO_ADMIN } from '../model/types'
 import { moneda, DIAS_CORTOS, MESES_CORTOS, horaCorta } from '../lib/formato'
 import { ejecutarAccionDeSync } from '../lib/syncAcciones'
 import { useSyncStore } from '../sync/syncEngine'
@@ -29,8 +31,9 @@ interface DatosResumen {
   stockBajo: number
 }
 
-/** Resúmenes financieros semanales y mensuales (solo administrador). */
+/** Resúmenes financieros semanales y mensuales (lectura para registrados; sync solo admin). */
 export function Resumenes() {
+  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
   const [datos, setDatos] = useState<DatosResumen | null>(null)
   const { enLinea, pendientes, ultimaSync } = useSyncStore()
   const [accion, setAccion] = useState<'sincronizar' | 'subir' | 'bajar' | null>(null)
@@ -140,8 +143,9 @@ export function Resumenes() {
             </Card>
           </div>
 
-          <Card className="p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          {esAdmin ? (
+            <Card className="p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-base font-semibold tracking-tight text-zinc-900">
                   Sincronización de datos
@@ -191,7 +195,8 @@ export function Resumenes() {
                 </Button>
               </div>
             </div>
-          </Card>
+            </Card>
+          ) : null}
         </>
       )}
     </div>

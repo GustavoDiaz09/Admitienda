@@ -1,7 +1,7 @@
 import { Component, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Storefront } from '@phosphor-icons/react'
-import { esAdministrador, restaurarSesion, useSesionStore } from './controller/SessionController'
+import { restaurarSesion, useSesionStore } from './controller/SessionController'
 import { TIPO_ADMIN } from './model/types'
 import { inicializarApp } from './lib/inicializacion'
 import { iniciarMotorDeSync } from './sync/syncEngine'
@@ -51,13 +51,19 @@ function SoloAdministrador({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+/** Restringe una ruta a usuarios con cuenta (admin o registrado): bloquea invitados. */
+function SoloConCuenta({ children }: { children: ReactNode }) {
+  const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
+  if (!hayCuenta) {
+    return <Navigate to="/productos" replace />
+  }
+  return <>{children}</>
+}
+
 /** Página de inicio según el rol (los invitados solo ven productos). */
 function Inicio() {
-  return esAdministrador() ? (
-    <Navigate to="/resumenes" replace />
-  ) : (
-    <Navigate to="/productos" replace />
-  )
+  const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
+  return <Navigate to={hayCuenta ? '/resumenes' : '/productos'} replace />
 }
 
 /** Recoge fallos de render para que nunca quede la pantalla en blanco. */
@@ -147,9 +153,9 @@ export default function App() {
               <Route
                 path="resumenes"
                 element={
-                  <SoloAdministrador>
+                  <SoloConCuenta>
                     <Resumenes />
-                  </SoloAdministrador>
+                  </SoloConCuenta>
                 }
               />
               <Route
@@ -163,9 +169,9 @@ export default function App() {
               <Route
                 path="deudas"
                 element={
-                  <SoloAdministrador>
+                  <SoloConCuenta>
                     <Deudas />
-                  </SoloAdministrador>
+                  </SoloConCuenta>
                 }
               />
               <Route

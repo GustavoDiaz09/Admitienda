@@ -10,7 +10,9 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { DeudaController } from '../controller/DeudaController'
+import { useSesionStore } from '../controller/SessionController'
 import type { Deuda, PagoDeuda } from '../model/types'
+import { TIPO_ADMIN } from '../model/types'
 import { moneda } from '../lib/formato'
 import { avisarError, avisarExito } from '../lib/toast'
 import { Button } from '../components/ui/Button'
@@ -44,8 +46,9 @@ function formatearFecha(texto: string): string {
   return `${dia}/${mes}/${anio}${hora ? ` ${hora}` : ''}`
 }
 
-/** Vista del CRM de deudas: ventas fiadas, abonos e historial por cliente. */
+/** Vista del CRM de deudas: ventas fiadas, abonos e historial por cliente. Registrados solo leen. */
 export function Deudas() {
+  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
   const [deudas, setDeudas] = useState<Deuda[] | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState<FiltroDeuda>('TODAS')
@@ -93,15 +96,17 @@ export function Deudas() {
         titulo="Deudas y pagos"
         descripcion="CRM de ventas fiadas: registre deudas, reciba abonos y consulte el historial por cliente."
         acciones={
-          <Button
-            icono={Plus}
-            onClick={() => {
-              setClientePrefill('')
-              setModalNueva(true)
-            }}
-          >
-            Nueva deuda
-          </Button>
+          esAdmin ? (
+            <Button
+              icono={Plus}
+              onClick={() => {
+                setClientePrefill('')
+                setModalNueva(true)
+              }}
+            >
+              Nueva deuda
+            </Button>
+          ) : undefined
         }
       />
 
@@ -157,15 +162,17 @@ export function Deudas() {
                 : 'No hay deudas que coincidan con la búsqueda.'
             }
             accion={
-              <Button
-                icono={Plus}
-                onClick={() => {
-                  setClientePrefill('')
-                  setModalNueva(true)
-                }}
-              >
-                Nueva deuda
-              </Button>
+              esAdmin ? (
+                <Button
+                  icono={Plus}
+                  onClick={() => {
+                    setClientePrefill('')
+                    setModalNueva(true)
+                  }}
+                >
+                  Nueva deuda
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -207,7 +214,7 @@ export function Deudas() {
                       >
                         <Eye size={16} weight="bold" />
                       </button>
-                      {!saldada ? (
+                      {esAdmin && !saldada ? (
                         <button
                           type="button"
                           onClick={() => setAbono(d)}
@@ -217,25 +224,27 @@ export function Deudas() {
                           <Coins size={16} weight="bold" />
                         </button>
                       ) : null}
-                      <ConfirmButton
-                        accion={<Trash size={14} weight="bold" />}
-                        titulo="Eliminar deuda"
-                        mensaje={
-                          <>
-                            ¿Desea eliminar la deuda de <b>{d.cliente_nombre}</b> y sus pagos?
-                            Los ingresos ya registrados en caja no se modifican.
-                          </>
-                        }
-                        confirmar={async () => {
-                          const resultado = await new DeudaController().eliminarDeuda(d.id)
-                          if (resultado.exito) {
-                            avisarExito(resultado.mensaje)
-                            await cargar()
-                          } else {
-                            avisarError(resultado.mensaje)
+                      {esAdmin ? (
+                        <ConfirmButton
+                          accion={<Trash size={14} weight="bold" />}
+                          titulo="Eliminar deuda"
+                          mensaje={
+                            <>
+                              ¿Desea eliminar la deuda de <b>{d.cliente_nombre}</b> y sus pagos?
+                              Los ingresos ya registrados en caja no se modifican.
+                            </>
                           }
-                        }}
-                      />
+                          confirmar={async () => {
+                            const resultado = await new DeudaController().eliminarDeuda(d.id)
+                            if (resultado.exito) {
+                              avisarExito(resultado.mensaje)
+                              await cargar()
+                            } else {
+                              avisarError(resultado.mensaje)
+                            }
+                          }}
+                        />
+                      ) : null}
                     </div>
                   </Celda>
                 </tr>
@@ -288,6 +297,7 @@ export function Deudas() {
         cliente={historial}
         deudas={deudas?.filter((d) => d.cliente_nombre === historial) ?? []}
         abierto={historial !== null}
+        esAdmin={esAdmin}
         onCerrar={() => setHistorial(null)}
         onNuevaDeuda={(cliente) => {
           setClientePrefill(cliente)
@@ -504,12 +514,14 @@ function HistorialCliente({
   cliente,
   deudas,
   abierto,
+  esAdmin,
   onCerrar,
   onNuevaDeuda,
 }: {
   cliente: string | null
   deudas: Deuda[]
   abierto: boolean
+  esAdmin: boolean
   onCerrar: () => void
   onNuevaDeuda: (cliente: string) => void
 }) {
@@ -555,6 +567,7 @@ function HistorialCliente({
                 <b className="text-red-600 tabular-nums">{moneda(pendiente)}</b>
               </p>
             </div>
+            {esAdmin ? (
             <Button
               className="ml-auto"
               tamanio="sm"
@@ -563,6 +576,7 @@ function HistorialCliente({
             >
               Nueva deuda
             </Button>
+          ) : null}
           </div>
         ) : null}
 
