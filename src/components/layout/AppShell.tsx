@@ -4,6 +4,7 @@ import {
   ArrowsLeftRight,
   BellRinging,
   ChartBar,
+  HandCoins,
   List,
   Package,
   ShieldCheck,
@@ -25,6 +26,7 @@ const TITULOS: Record<string, string> = {
   '/resumenes': 'Resúmenes financieros',
   '/productos': 'Tabla de productos',
   '/movimientos': 'Ingresos y egresos',
+  '/deudas': 'Deudas y pagos',
   '/usuarios': 'Gestión de usuarios',
   '/alertas': 'Alertas de inventario',
 }
@@ -38,6 +40,7 @@ const ITEMS: Array<{
   { ruta: '/resumenes', etiqueta: 'Resúmenes', icono: ChartBar, soloAdmin: true },
   { ruta: '/productos', etiqueta: 'Productos', icono: Package },
   { ruta: '/movimientos', etiqueta: 'Ingresos y egresos', icono: ArrowsLeftRight, soloAdmin: true },
+  { ruta: '/deudas', etiqueta: 'Deudas y pagos', icono: HandCoins, soloAdmin: true },
   { ruta: '/usuarios', etiqueta: 'Usuarios', icono: UserCircle, soloAdmin: true },
   { ruta: '/alertas', etiqueta: 'Alertas', icono: BellRinging, soloAdmin: true },
 ]

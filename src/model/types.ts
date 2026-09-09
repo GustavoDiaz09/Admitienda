@@ -22,7 +22,13 @@ export interface RegistroBase {
 }
 
 /** Nombre de las tablas que se sincronizan con Supabase. */
-export type TablaSync = 'usuarios' | 'productos' | 'movimientos' | 'solicitudes_admin'
+export type TablaSync =
+  | 'usuarios'
+  | 'productos'
+  | 'movimientos'
+  | 'solicitudes_admin'
+  | 'deudas'
+  | 'pagos_deuda'
 
 /** Tipo de usuario: administrador (acceso completo). */
 export const TIPO_ADMIN = 'ADMIN'
@@ -91,6 +97,29 @@ export interface SolicitudAdmin extends RegistroBase {
   fecha_solicitud: string
   /** Nombre del usuario solicitante (join con usuarios para mostrar en pantalla). */
   nombre_usuario?: string
+}
+
+/**
+ * Deuda de un cliente (venta fiada). El `monto` es el total original y
+ * `saldo` lo que aún falta por pagar; cuando `saldo` llega a 0 la deuda
+ * se considera saldada.
+ */
+export interface Deuda extends RegistroBase {
+  cliente_nombre: string
+  monto: number
+  saldo: number
+  descripcion: string
+  /** Fecha en formato "yyyy-MM-dd HH:mm" (compatible con el sistema Java). */
+  fecha: string
+}
+
+/** Pago (abono) aplicado a una deuda. Cada abono genera un ingreso en caja. */
+export interface PagoDeuda extends RegistroBase {
+  deuda_id: string
+  monto: number
+  descripcion: string
+  /** Fecha en formato "yyyy-MM-dd HH:mm" (compatible con el sistema Java). */
+  fecha: string
 }
 
 /** Entrada de la cola de sincronización (outbox). */

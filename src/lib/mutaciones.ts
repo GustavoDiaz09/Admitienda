@@ -23,6 +23,10 @@ function tablaDe(tabla: TablaSync): Table<RegistroBase, string> {
       return db.movimientos as Table<RegistroBase, string>
     case 'solicitudes_admin':
       return db.solicitudes_admin as Table<RegistroBase, string>
+    case 'deudas':
+      return db.deudas as Table<RegistroBase, string>
+    case 'pagos_deuda':
+      return db.pagos_deuda as Table<RegistroBase, string>
   }
 }
 

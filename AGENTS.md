@@ -18,9 +18,10 @@ sesión después de reiniciar el asistente**:
    **aplicar `supabase/migracion.sql`** ejecutándola por la herramienta de SQL
    del MCP (`mcp__supabase__query`). Si un lote completo es rechazado en bloque,
    ejecutar las sentencias una a una.
-3. **Verificar** que existan las 4 tablas en `public` con:
+3. **Verificar** que existan las 6 tablas en `public` con:
    `select tablename from pg_tables where schemaname = 'public';`
-   → esperado: `usuarios`, `productos`, `movimientos`, `solicitudes_admin`.
+   → esperado: `usuarios`, `productos`, `movimientos`, `solicitudes_admin`,
+   `deudas`, `pagos_deuda`.
 4. **PROHIBIDO**: ejecutar `drop`, borrar tablas/PKs, eliminar políticas RLS ni
    tocar datos que el usuario viva usando. La PK `id` es el blanco del upsert:
    nunca se elimina.
@@ -114,17 +115,17 @@ administrador).
 - `src/components/` — `ui/` (Button, Campo, Modal, Tabla, Card, Insignia,
   Toasts, ConfirmButton, Base), `layout/` (AppShell, SyncIndicator), `auth/`.
 - `src/views/` — Login, Registro, RecuperarContrasena, Productos, Movimientos,
-  Resumenes, Usuarios, Alertas. Rutas en `src/App.tsx` (lazy + Suspense,
-  `RequiereSesion` y `SoloAdministrador`, bootstrap `inicializarApp() →
-  restaurarSesion() → iniciarMotorDeSync()`).
+  Deudas (CRM de ventas fiadas), Resumenes, Usuarios, Alertas. Rutas en
+  `src/App.tsx` (lazy + Suspense, `RequiereSesion` y `SoloAdministrador`,
+  bootstrap `inicializarApp() → restaurarSesion() → iniciarMotorDeSync()`).
 - `public/` — `favicon.svg`, `icons.svg` (PWA).
-- `supabase/migracion.sql` — crea las 4 tablas espejo + permisos RLS.
+- `supabase/migracion.sql` — crea las 6 tablas espejo + permisos RLS.
 
 ## Supabase
 
 - La clave anon está en `.env` (`VITE_SUPABASE_URL`,
   `VITE_SUPABASE_ANON_KEY`). **No commitear `.env`.**
-- Las 4 tablas remotas replican el esquema local (mismo nombre, columnas
+- Las 6 tablas remotas replican el esquema local (mismo nombre, columnas
   snake_case, PK `id uuid`). La PK es la referencia `onConflict` del upsert:
   **no eliminar las PKs ni las políticas RLS** de `supabase/migracion.sql`.
 - El clon de SQL se ejecuta con el MCP de Supabase (proyecto
@@ -152,12 +153,14 @@ administrador).
 
 ## Estado actual
 
-- Fases 0–5 completas (scaffolding, auth+BD, controladores, sync, vistas con
-  rediseño moderno, PWA). Fase 6: tests de humo 4/4 en verde y documentación
-  completa. `tsc`, lint y build limpios.
+- Fases 0–6 completas (scaffolding, auth+BD, controladores, sync, vistas con
+  rediseño moderno, PWA, tests de humo y documentación). Se añadió el **CRM de
+  deudas** (v7): ventas fiadas por cliente con abonos parciales; cada abono
+  registra un ingreso en caja y cada deuda/pago se sincroniza con Supabase
+  (tablas `deudas` y `pagos_deuda`). `tsc`, lint y build limpios.
 - Checklist de pendientes (ver «PARÁMETRO PRINCIPAL»):
   - [x] Aplicar `supabase/migracion.sql` en el proyecto remoto vía MCP
-        (hecho el 09/09/2026; las 4 tablas + RLS están en `public`).
+        (hecho el 09/09/2026; las 6 tablas + RLS están en `public`).
   - [ ] (Opcional, con tu visto bueno) Poblar la nube desde la app con «Subir
         todo» para que otro dispositivo pueda hacer pull.
 - Ideas futuras: exportación CSV/PDF, gráfico SVG en Resúmenes, verificación

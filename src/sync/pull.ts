@@ -3,7 +3,14 @@ import { db } from '../lib/db'
 import { useSyncStore } from './syncEngine'
 import type { RegistroBase, TablaSync } from '../model/types'
 
-export const TABLAS: TablaSync[] = ['usuarios', 'productos', 'movimientos', 'solicitudes_admin']
+export const TABLAS: TablaSync[] = [
+  'usuarios',
+  'productos',
+  'movimientos',
+  'solicitudes_admin',
+  'deudas',
+  'pagos_deuda',
+]
 
 interface ResultadoPull {
   recibidos: number
@@ -51,6 +58,10 @@ function tablaDexie(tabla: TablaSync) {
       return db.movimientos
     case 'solicitudes_admin':
       return db.solicitudes_admin
+    case 'deudas':
+      return db.deudas
+    case 'pagos_deuda':
+      return db.pagos_deuda
   }
 }
 
@@ -163,6 +174,21 @@ function filaExtra(tabla: TablaSync, r: RegistroBase): Record<string, unknown> {
         usuario_id: registro.usuario_id,
         estado: registro.estado,
         fecha_solicitud: registro.fecha_solicitud,
+      }
+    case 'deudas':
+      return {
+        cliente_nombre: registro.cliente_nombre,
+        monto: registro.monto,
+        saldo: registro.saldo,
+        descripcion: registro.descripcion,
+        fecha: registro.fecha,
+      }
+    case 'pagos_deuda':
+      return {
+        deuda_id: registro.deuda_id,
+        monto: registro.monto,
+        descripcion: registro.descripcion,
+        fecha: registro.fecha,
       }
   }
 }

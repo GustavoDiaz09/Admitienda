@@ -106,5 +106,52 @@ create policy "solicitudes_lectura" on public.solicitudes_admin for select to an
 create policy "solicitudes_escritura" on public.solicitudes_admin for insert to anon with check (true);
 create policy "solicitudes_actualizacion" on public.solicitudes_admin for update to anon using (true) with check (true);
 
+-- ============================================================
+-- deudas (CRM: ventas fiadas por cliente)
+-- ============================================================
+create table if not exists public.deudas (
+  id uuid primary key default gen_random_uuid(),
+  cliente_nombre text not null,
+  monto double precision not null default 0,
+  saldo double precision not null default 0,
+  descripcion text,
+  fecha text not null,
+  creado_en bigint not null default 0,
+  actualizado_en bigint not null default 0,
+  version integer not null default 1,
+  eliminado boolean not null default false,
+  dispositivo text not null default ''
+);
+
+-- ============================================================
+-- pagos_deuda (abonos aplicados a las deudas)
+-- ============================================================
+create table if not exists public.pagos_deuda (
+  id uuid primary key default gen_random_uuid(),
+  deuda_id text not null,
+  monto double precision not null default 0,
+  descripcion text,
+  fecha text not null,
+  creado_en bigint not null default 0,
+  actualizado_en bigint not null default 0,
+  version integer not null default 1,
+  eliminado boolean not null default false,
+  dispositivo text not null default ''
+);
+
+create index if not exists idx_deudas_cliente on public.deudas (cliente_nombre);
+create index if not exists idx_pagos_deuda on public.pagos_deuda (deuda_id);
+
+alter table public.deudas enable row level security;
+alter table public.pagos_deuda enable row level security;
+
+create policy "deudas_lectura" on public.deudas for select to anon using (true);
+create policy "deudas_escritura" on public.deudas for insert to anon with check (true);
+create policy "deudas_actualizacion" on public.deudas for update to anon using (true) with check (true);
+
+create policy "pagos_lectura" on public.pagos_deuda for select to anon using (true);
+create policy "pagos_escritura" on public.pagos_deuda for insert to anon with check (true);
+create policy "pagos_actualizacion" on public.pagos_deuda for update to anon using (true) with check (true);
+
 -- Nota: la clave primaria de cada tabla (id uuid) es la referencia de
 -- conflicto del upsert; NO eliminar estas restricciones.

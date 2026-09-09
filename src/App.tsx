@@ -22,6 +22,7 @@ const Movimientos = lazy(() =>
 const Resumenes = lazy(() => import('./views/Resumenes').then((m) => ({ default: m.Resumenes })))
 const Usuarios = lazy(() => import('./views/Usuarios').then((m) => ({ default: m.Usuarios })))
 const Alertas = lazy(() => import('./views/Alertas').then((m) => ({ default: m.Alertas })))
+const Deudas = lazy(() => import('./views/Deudas').then((m) => ({ default: m.Deudas })))
 
 /** Inicialización única (semilla, sesión restaurada y motor de sync). */
 let promesaArranque: Promise<void> | null = null
@@ -132,6 +133,14 @@ export default function App() {
                 element={
                   <SoloAdministrador>
                     <Usuarios />
+                  </SoloAdministrador>
+                }
+              />
+              <Route
+                path="deudas"
+                element={
+                  <SoloAdministrador>
+                    <Deudas />
                   </SoloAdministrador>
                 }
               />

@@ -153,6 +153,21 @@ function columnasExtra(tabla: TablaSync, r: RegistroBase): Record<string, unknow
         estado: registro.estado,
         fecha_solicitud: registro.fecha_solicitud,
       }
+    case 'deudas':
+      return {
+        cliente_nombre: registro.cliente_nombre,
+        monto: registro.monto,
+        saldo: registro.saldo,
+        descripcion: registro.descripcion,
+        fecha: registro.fecha,
+      }
+    case 'pagos_deuda':
+      return {
+        deuda_id: registro.deuda_id,
+        monto: registro.monto,
+        descripcion: registro.descripcion,
+        fecha: registro.fecha,
+      }
   }
 }
 

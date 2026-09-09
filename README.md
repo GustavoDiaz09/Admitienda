@@ -13,6 +13,9 @@ de la app de escritorio `SistemaTienda` (Java + Swing), con lo novedoso de que
 - **Sincronización con la nube:** los cambios se suben automáticamente cuando
   hay conexión; un administrador puede descargar/sobrescribir desde un
   dispositivo nuevo (botones en el panel de sincronización).
+- **CRM de deudas:** ventas fiadas por cliente, abonos parciales y un
+  historial por cliente con sus deudas y pagos realizados (cada abono se
+  registra como ingreso en la caja).
 - **Roles:** INVITADO (solo ver productos), REGISTRADO (ver productos +
   solicitar permiso de admin), ADMINISTRADOR (acceso completo).
 - **Autenticación local** (por dispositivo) compatible con la app de escritorio.
@@ -65,8 +68,8 @@ sistematienda-web/
 │   ├── App.tsx          Rutas, guards y arranque de la app
 │   └── test/            Pruebas Vitest
 ├── supabase/
-│   └── migracion.sql    Esquema remoto (4 tablas espejo + permisos RLS)
-├── public/              favicon.svg, icons.svg (PWA)
+│   └── migracion.sql    Esquema remoto (6 tablas espejo + permisos RLS)
+├── public/              favicon, iconos PWA (SVG + PNG)
 └── vite.config.ts       Vite + Tailwind v4 + vite-plugin-pwa
 ```
 
@@ -93,7 +96,7 @@ sistematienda-web/
 
 1. Crea un proyecto en Supabase y copia la URL y la clave anon a `.env`
    (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 4 tablas y sus
+2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 6 tablas y sus
    políticas de seguridad). La autenticación es local, así que las políticas
    permiten leer/escribir con la clave anon del proyecto.
 3. Abre la app en un segundo dispositivo con la misma config y usa **bajar

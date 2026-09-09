@@ -82,7 +82,7 @@ y `metadatos`).
   con guion bajo (`nombre_producto`) igual que las columnas de Supabase. En
   `pull.ts`, `filaExtra()` convierte los campos base al subir y `filaLocal()`
   los recompone al bajar.
-- **Esquema remoto:** `supabase/migracion.sql` crea las 4 tablas espejo con PK
+- **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo con PK
   `id uuid` (blanco del `onConflict`) y políticas RLS abiertas a la clave anon
   (la autenticación es local; no se usa auth de Supabase).
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
