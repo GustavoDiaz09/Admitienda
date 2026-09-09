@@ -1,5 +1,4 @@
-import type { ReactNode } from 'react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Component, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Storefront } from '@phosphor-icons/react'
 import { esAdministrador, restaurarSesion, useSesionStore } from './controller/SessionController'
@@ -8,21 +7,16 @@ import { inicializarApp } from './lib/inicializacion'
 import { iniciarMotorDeSync } from './sync/syncEngine'
 import { AppShell } from './components/layout/AppShell'
 import { Toasts } from './components/ui/Toasts'
-
-/* Rutas divididas por vista para mantener ligero el paquete inicial. */
-const Login = lazy(() => import('./views/Login').then((m) => ({ default: m.Login })))
-const Registro = lazy(() => import('./views/Registro').then((m) => ({ default: m.Registro })))
-const RecuperarContrasena = lazy(() =>
-  import('./views/RecuperarContrasena').then((m) => ({ default: m.RecuperarContrasena })),
-)
-const Productos = lazy(() => import('./views/Productos').then((m) => ({ default: m.Productos })))
-const Movimientos = lazy(() =>
-  import('./views/Movimientos').then((m) => ({ default: m.Movimientos })),
-)
-const Resumenes = lazy(() => import('./views/Resumenes').then((m) => ({ default: m.Resumenes })))
-const Usuarios = lazy(() => import('./views/Usuarios').then((m) => ({ default: m.Usuarios })))
-const Alertas = lazy(() => import('./views/Alertas').then((m) => ({ default: m.Alertas })))
-const Deudas = lazy(() => import('./views/Deudas').then((m) => ({ default: m.Deudas })))
+import { Button } from './components/ui/Button'
+import { Login } from './views/Login'
+import { Registro } from './views/Registro'
+import { RecuperarContrasena } from './views/RecuperarContrasena'
+import { Productos } from './views/Productos'
+import { Movimientos } from './views/Movimientos'
+import { Resumenes } from './views/Resumenes'
+import { Usuarios } from './views/Usuarios'
+import { Alertas } from './views/Alertas'
+import { Deudas } from './views/Deudas'
 
 /** Inicialización única (semilla, sesión restaurada y motor de sync). */
 let promesaArranque: Promise<void> | null = null
@@ -66,6 +60,37 @@ function Inicio() {
   )
 }
 
+/** Recoge fallos de render para que nunca quede la pantalla en blanco. */
+class LimiteDeErrores extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-zinc-100 p-6 text-center">
+          <span className="grid size-14 place-items-center rounded-2xl bg-red-100 text-red-600">
+            <Storefront size={28} weight="bold" />
+          </span>
+          <div>
+            <p className="text-base font-semibold text-zinc-900">Algo salió mal</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-500">
+              Ocurrió un error inesperado. La tienda está a salvo en este dispositivo.
+            </p>
+          </div>
+          <Button variante="primario" onClick={() => window.location.reload()}>
+            Recargar la aplicación
+          </Button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 /** Pantalla de carga mientras se inicializa la base local. */
 function PantallaDeCarga() {
   return (
@@ -101,11 +126,10 @@ export default function App() {
   }
 
   return (
-    <>
+    <LimiteDeErrores>
       <BrowserRouter>
-        <Suspense fallback={<PantallaDeCarga />}>
-          <Routes>
-            <Route path="/ingreso" element={<Login />} />
+        <Routes>
+          <Route path="/ingreso" element={<Login />} />
           <Route path="/registro" element={<Registro />} />
           <Route path="/recuperar" element={<RecuperarContrasena />} />
           <Route element={<RequiereSesion />}>
@@ -155,10 +179,9 @@ export default function App() {
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        </Routes>
       </BrowserRouter>
       <Toasts />
-    </>
+    </LimiteDeErrores>
   )
 }
