@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/*
+ * Sistema de diseño — AdmiTienda (web).
+ *
+ * Decisión de un solo acento: esmeralda (comercio / dinero). Neutros cálidos
+ * zinc. Sin gradientes morados ni efectos de "AI": sombras tintadas, radios
+ * documentados y movimiento discreto (solo transform + opacity, con
+ * `prefers-reduced-motion` respetado).
+ *
+ * Escala de radio (regla documentada, se aplica en todo el árbol):
+ *   - Botones ................. pill           (rounded-full)
+ *   - Campos de formulario .... 12px           (rounded-xl)
+ *   - Tarjetas / superficies .. 16px           (rounded-2xl)
+ *   - Chips / insignias ....... pill           (rounded-full)
+ */
+@theme {
+  --font-sans: "Outfit Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Outfit Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono",
+    Menlo, Consolas, monospace;
+
+  --shadow-card: 0 1px 2px rgb(24 24 27 / 0.04), 0 6px 16px -6px rgb(24 24 27 / 0.08);
+  --shadow-pop: 0 12px 40px -8px rgb(24 24 27 / 0.2);
+
+  --animate-desvanecer: desvanecer 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-aparecer: aparecer 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes desvanecer {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-zinc-100);
+    color: var(--color-zinc-900);
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background-color: rgb(16 185 129 / 0.25);
+  }
+}
+
+@layer components {
+  /* Aro de foco accesible (reemplaza el outline por defecto en controles). */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-zinc-100), 0 0 0 4px var(--color-emerald-500);
+  }
+
+  /* Campo base compartido por inputs y selects. */
+  .campo-base {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-zinc-300);
+    background-color: var(--color-white);
+    padding: 0.55rem 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--color-zinc-900);
+    transition: border-color 0.15s var(--ease-soft, cubic-bezier(0.16, 1, 0.3, 1)),
+      box-shadow 0.15s var(--ease-soft, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+  .campo-base::placeholder {
+    color: var(--color-zinc-400);
+  }
+  .campo-base:focus-visible {
+    outline: none;
+    border-color: var(--color-emerald-500);
+    box-shadow: 0 0 0 3px rgb(16 185 129 / 0.18);
+  }
+  .campo-base:disabled {
+    background-color: var(--color-zinc-100);
+    color: var(--color-zinc-400);
+    cursor: not-allowed;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
