@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/db'
-import { useSyncStore } from './syncEngine'
+import { useSyncStore, refrescarPendientes } from './syncEngine'
+import { vaciarOutbox } from './outbox'
+import { DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 export const TABLAS: TablaSync[] = [
@@ -17,14 +19,6 @@ interface ResultadoPull {
   actualizados: number
   tablas: number
   dispositivos: Set<string>
-}
-
-/** Regla "último write gana": remoto gana si tiene marca más reciente. */
-function esMasNuevo(remoto: RegistroBase, local: RegistroBase): boolean {
-  if (remoto.actualizadoEn !== local.actualizadoEn) {
-    return remoto.actualizadoEn > local.actualizadoEn
-  }
-  return remoto.version > local.version
 }
 
 /** Convierte una fila de Supabase (nombres con guion bajo) a registro local. */
@@ -66,9 +60,12 @@ function tablaDexie(tabla: TablaSync) {
 }
 
 /**
- * Descarga TODOS los datos de Supabase en este dispositivo y hace merge
- * con la regla "último write gana". Solo lo dispara un administrador de
- * forma explícita (botón "Sincronizar desde la nube").
+ * RESTAURA este dispositivo desde la nube: reemplaza TODO el contenido
+ * local (cada tabla y la cola de sincronización) con la copia de Supabase.
+ * Esta semántica es deliberada: el botón "Descargar todo de la nube" sirve
+ * para poner un dispositivo al día exactamente con lo que hay en la nube
+ * (p. ej. tras reinstalar la app) y evita que queden datos huérfanos o
+ * duplicados locales. Solo lo dispara un administrador de forma explícita.
  */
 export async function traerDatosDelServidor(): Promise<ResultadoPull> {
   const resultado: ResultadoPull = {
@@ -90,18 +87,18 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
     }
     const remotos = (data ?? []) as Array<Record<string, unknown>>
     const tablaLocal = tablaDexie(tabla)
+    await tablaLocal.clear()
     for (const fila of remotos) {
       const remoto = filaLocal(fila)
       resultado.recibidos++
       resultado.dispositivos.add(remoto.dispositivo)
-      const local = await tablaLocal.get(remoto.id)
-      if (!local || esMasNuevo(remoto, local)) {
-        await tablaLocal.put(remoto as never)
-        resultado.actualizados++
-      }
+      await tablaLocal.put(remoto as never)
+      resultado.actualizados++
     }
     resultado.tablas++
   }
+  await vaciarOutbox()
+  await refrescarPendientes()
   store.setUltimaSync(Date.now())
   return resultado
 }
@@ -109,6 +106,8 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
 /**
  * Sube la base local completa a Supabase (respaldar "a mano" al primer
  * uso en un dispositivo nuevo, para que el resto pueda descargarla).
+ * Los datos de ejemplo (marcados con DISPOSITIVO_SEMILLA) NO se suben:
+ * son una demo local y no deben contaminar la nube.
  */
 export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
   if (!supabase) {
@@ -117,7 +116,9 @@ export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
   let subidos = 0
   for (const tabla of TABLAS) {
     const tablaLocal = tablaDexie(tabla)
-    const registros = await tablaLocal.toArray()
+    const registros = (await tablaLocal.toArray()).filter(
+      (r) => r.dispositivo !== DISPOSITIVO_SEMILLA,
+    )
     if (registros.length === 0) {
       continue
     }

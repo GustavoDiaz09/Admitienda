@@ -4,6 +4,7 @@ import { inicializarApp } from '../lib/inicializacion'
 import { UsuarioController } from '../controller/UsuarioController'
 import { ProductoController } from '../controller/ProductoController'
 import { MovimientoController } from '../controller/MovimientoController'
+import { DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
 import { TIPO_ADMIN, TIPO_INGRESO } from '../model/types'
 
 beforeEach(async () => {
@@ -22,11 +23,16 @@ describe('Arranque de la aplicación', () => {
     expect(productos.length).toBeGreaterThan(0)
   })
 
-  it('deja los datos de ejemplo solo en el dispositivo (no los encola para subir)', async () => {
+  it('deja los datos de ejemplo solo en el dispositivo: marcados como semilla y sin encolar', async () => {
     await inicializarApp()
 
-    expect(await db.usuarios.count()).toBeGreaterThan(0)
-    expect(await db.productos.count()).toBeGreaterThan(0)
+    const sembrados = [
+      ...(await db.usuarios.toArray()),
+      ...(await db.productos.toArray()),
+      ...(await db.movimientos.toArray()),
+    ]
+    expect(sembrados.length).toBeGreaterThan(0)
+    expect(sembrados.every((r) => r.dispositivo === DISPOSITIVO_SEMILLA)).toBe(true)
     expect(await db.outbox.count()).toBe(0)
   })
 

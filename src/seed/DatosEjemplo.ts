@@ -1,6 +1,5 @@
 import { db } from '../lib/db'
 import { formatFecha } from '../lib/fecha'
-import { obtenerDispositivoId } from '../sync/dispositivo'
 import { generarSalt, hashContrasena } from '../lib/password'
 import {
   TIPO_ADMIN,
@@ -15,6 +14,13 @@ import { TIPO_INGRESO_TEXTO, TIPO_EGRESO_TEXTO } from './constantes'
 export const ADMIN_INICIAL_USUARIO = 'admin'
 export const ADMIN_INICIAL_CONTRASENA = 'admin123'
 export const ADMIN_INICIAL_INDICIO = 'Tienda'
+
+/**
+ * Valor marcador de "dispositivo" de los datos de ejemplo. Detecta que el
+ * registro es una demo local: no se encola ni se sube, incluso si el
+ * administrador usa "Subir todo a la nube".
+ */
+export const DISPOSITIVO_SEMILLA = 'semilla-local'
 
 /** Productos de ejemplo: tipo, nombre, costo, venta, stock, stock mínimo (COP). */
 const PRODUCTOS: ReadonlyArray<readonly [string, string, number, number, number, number]> = [
@@ -80,7 +86,7 @@ async function baseLocal(): Promise<RegistroBase> {
     actualizadoEn: ahora,
     version: 1,
     eliminado: false,
-    dispositivo: await obtenerDispositivoId(),
+    dispositivo: DISPOSITIVO_SEMILLA,
   }
 }
 
