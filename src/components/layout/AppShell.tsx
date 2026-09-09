@@ -45,6 +45,19 @@ const ITEMS: Array<{
   { ruta: '/alertas', etiqueta: 'Alertas', icono: BellRinging, soloAdmin: true },
 ]
 
+/** Accesos rápidos del hub inferior para dispositivos móviles. */
+const HUB_MOVILES: Array<{
+  ruta: string
+  etiqueta: string
+  icono: typeof Package
+  soloAdmin?: boolean
+}> = [
+  { ruta: '/resumenes', etiqueta: 'Resumen', icono: ChartBar, soloAdmin: true },
+  { ruta: '/productos', etiqueta: 'Productos', icono: Package },
+  { ruta: '/movimientos', etiqueta: 'Ingresos', icono: ArrowsLeftRight, soloAdmin: true },
+  { ruta: '/deudas', etiqueta: 'Deudas', icono: HandCoins, soloAdmin: true },
+]
+
 /** Contenido de la barra lateral (compartido entre escritorio y modal móvil). */
 export function AppShell() {
   const usuarioActivo = useSesionStore((estado) => estado.usuarioActivo)
@@ -74,6 +87,7 @@ export function AppShell() {
   }
 
   const itemsVisibles = ITEMS.filter((item) => !item.soloAdmin || esAdmin)
+  const hubMovilVisible = HUB_MOVILES.filter((item) => !item.soloAdmin || esAdmin)
 
   const barraLateral = (cerrar: () => void) => (
     <div className="flex h-full flex-col bg-zinc-950">
@@ -222,10 +236,41 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 pt-6 sm:px-6 sm:py-8 lg:px-8 lg:pb-8">
           <Outlet />
         </main>
       </div>
+
+      {/* Hub de navegación inferior (solo móvil/tableta). */}
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      >
+        <div className="grid grid-cols-4">
+          {hubMovilVisible.map((item) => (
+            <NavLink
+              key={item.ruta}
+              to={item.ruta}
+              className={({ isActive }) =>
+                cn(
+                  'relative flex flex-col items-center gap-1 py-2.5 pt-3 text-[11px] font-medium transition-colors',
+                  isActive ? 'text-emerald-600' : 'text-zinc-400 hover:text-zinc-700',
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive ? (
+                    <span className="absolute top-0 h-0.5 w-10 rounded-full bg-emerald-500" />
+                  ) : null}
+                  <item.icono size={22} weight={isActive ? 'fill' : 'regular'} />
+                  <span className="leading-none">{item.etiqueta}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   )
 }

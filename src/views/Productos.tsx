@@ -108,7 +108,7 @@ export function Productos() {
             accion={esAdmin ? <Button icono={Plus} onClick={() => setEdicion('nuevo')}>Nuevo producto</Button> : undefined}
           />
         ) : (
-          <Tabla encabezados={['Producto', 'Precio neto', 'Ganancia', 'Precio venta', 'Stock', 'St. mín', 'Estado', ...(esAdmin ? [''] : [])]}>
+          <Tabla encabezados={['Producto', 'Precio venta', 'Precio neto', 'Ganancia', 'Stock', 'St. mín', 'Estado', ...(esAdmin ? [''] : [])]}>
             {filtrados.map((p) => {
               const estado = estadoDeProducto(p)
               const resaltada =
@@ -130,11 +130,11 @@ export function Productos() {
                       </div>
                     </div>
                   </Celda>
-                  <CeldaNumerica>{moneda(p.precio_neto)}</CeldaNumerica>
-                  <CeldaNumerica>{moneda(p.ganancia)}</CeldaNumerica>
                   <CeldaNumerica className="font-semibold text-zinc-900">
                     {moneda(calcularPrecioDeVenta(p))}
                   </CeldaNumerica>
+                  <CeldaNumerica>{moneda(p.precio_neto)}</CeldaNumerica>
+                  <CeldaNumerica>{moneda(p.ganancia)}</CeldaNumerica>
                   <CeldaNumerica className={p.cantidad_stock <= 0 ? 'font-semibold text-red-600' : undefined}>
                     {p.cantidad_stock}
                   </CeldaNumerica>
