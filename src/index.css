@@ -76,6 +76,43 @@
     box-shadow: 0 0 0 2px var(--color-zinc-100), 0 0 0 4px var(--color-emerald-500);
   }
 
+  /* Pulsación del hub móvil: respuesta táctil inmediata (120 ms, no bloquea
+     la navegación). El icono hace un micro-pop y el botón una leve compresión. */
+  .hub-pulso {
+    transition-property: color, transform;
+    transition-duration: 120ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+  .hub-pulso:active {
+    transform: scale(0.9);
+  }
+  .hub-pulso:active svg {
+    animation: hub-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes hub-pop {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.22);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hub-pulso {
+      transition: none;
+    }
+    .hub-pulso:active {
+      transform: none;
+    }
+    .hub-pulso:active svg {
+      animation: none;
+    }
+  }
+
   /* Campo base compartido por inputs y selects. */
   .campo-base {
     width: 100%;

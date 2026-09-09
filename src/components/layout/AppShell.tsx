@@ -253,7 +253,7 @@ export function AppShell() {
               to={item.ruta}
               className={({ isActive }) =>
                 cn(
-                  'relative flex flex-col items-center gap-1 py-2.5 pt-3 text-[11px] font-medium transition-colors',
+                  'hub-pulso relative flex flex-col items-center gap-1 py-2.5 pt-3 text-[11px] font-medium active:text-emerald-600',
                   isActive ? 'text-emerald-600' : 'text-zinc-400 hover:text-zinc-700',
                 )
               }
