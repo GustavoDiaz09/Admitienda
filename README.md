@@ -1,8 +1,8 @@
 # AdmiTienda (Web — PWA offline-first)
 
-> **Documentación interna del proyecto.** Este README y `AGENTS.md` muestran
-> rutas y credenciales locales de ejemplo: NO se suben a GitHub. El repositorio
-> remoto solo contiene el código de la aplicación.
+> **Documentación interna del proyecto.** Este README muestra rutas y
+> credenciales locales de ejemplo; la documentación completa de trabajo
+> (AGENTS.md) queda solo en local y NO se sube a GitHub.
 
 Aplicación web para administrar una tienda: usuarios, productos, ingresos y
 egresos, resúmenes financieros y alertas de inventario bajo. Es una versión web
