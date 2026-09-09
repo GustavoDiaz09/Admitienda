@@ -22,6 +22,14 @@ describe('Arranque de la aplicación', () => {
     expect(productos.length).toBeGreaterThan(0)
   })
 
+  it('deja los datos de ejemplo solo en el dispositivo (no los encola para subir)', async () => {
+    await inicializarApp()
+
+    expect(await db.usuarios.count()).toBeGreaterThan(0)
+    expect(await db.productos.count()).toBeGreaterThan(0)
+    expect(await db.outbox.count()).toBe(0)
+  })
+
   it('permite iniciar sesión con las credenciales por defecto', async () => {
     await inicializarApp()
 

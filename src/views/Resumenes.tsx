@@ -148,7 +148,7 @@ export function Resumenes() {
                 </h2>
                 <p className="mt-0.5 max-w-lg text-sm text-zinc-500">
                   {enLinea
-                    ? 'Los cambios se suben automáticamente a la nube. Use "Subir todo" para respaldar la base completa o "Descargar" en un dispositivo nuevo.'
+                    ? 'Los cambios se suben automáticamente a la nube. Use "Subir todo" para respaldar la base completa o "Descargar todo" en un dispositivo nuevo (reemplaza la copia local con la de la nube).'
                     : 'Sin conexión: los cambios quedan guardados localmente y se sincronizarán al recuperar la red.'}
                 </p>
                 <p className="mt-1.5 text-xs font-medium text-zinc-500">

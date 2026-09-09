@@ -41,3 +41,8 @@ export async function eliminarItem(item: ItemOutbox): Promise<void> {
 export async function marcarIntento(item: ItemOutbox): Promise<void> {
   await db.outbox.update(item.id, { intentos: item.intentos + 1 })
 }
+
+/** Vacía toda la cola de sincronización (uso en la restauración desde la nube). */
+export async function vaciarOutbox(): Promise<void> {
+  await db.outbox.clear()
+}

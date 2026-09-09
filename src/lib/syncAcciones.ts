@@ -35,7 +35,7 @@ export async function ejecutarAccionDeSync(accion: TipoAccionSync): Promise<void
     const resultado = await traerDatosDelServidor()
     await refrescarPendientes()
     avisarExito(
-      `Descarga completa: ${resultado.recibidos} registro(s) recibidos, ${resultado.actualizados} actualizados.`,
+      `Dispositivo restaurado desde la nube: ${resultado.recibidos} registro(s) recibidos.`,
     )
     window.dispatchEvent(new Event(EVENTO_DATOS))
   } catch (error) {

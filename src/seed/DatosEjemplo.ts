@@ -1,10 +1,15 @@
 import { db } from '../lib/db'
 import { formatFecha } from '../lib/fecha'
-import { ProductoController } from '../controller/ProductoController'
-import { UsuarioController } from '../controller/UsuarioController'
-import { MovimientoDao } from '../dao/MovimientoDao'
+import { obtenerDispositivoId } from '../sync/dispositivo'
+import { generarSalt, hashContrasena } from '../lib/password'
+import {
+  TIPO_ADMIN,
+  type Movimiento,
+  type Producto,
+  type RegistroBase,
+  type Usuario,
+} from '../model/types'
 import { TIPO_INGRESO_TEXTO, TIPO_EGRESO_TEXTO } from './constantes'
-import type { Movimiento } from '../model/types'
 
 /** Credenciales del administrador inicial (iguales a la app de escritorio). */
 export const ADMIN_INICIAL_USUARIO = 'admin'
@@ -62,28 +67,50 @@ const MOVIMIENTOS: ReadonlyArray<readonly [number, number, string, number, strin
 ]
 
 /**
+ * Campos comunes de sincronización para los datos de ejemplo. Estos registros
+ * se escriben DIRECTAMENTE en IndexedDB con `put` y, a diferencia de los
+ * registros reales (que pasan por `nuevoRegistro` y se encolan en el outbox),
+ * NUNCA se envían a la nube: son una demo local de cada dispositivo.
+ */
+async function baseLocal(): Promise<RegistroBase> {
+  const ahora = Date.now()
+  return {
+    id: crypto.randomUUID(),
+    creadoEn: ahora,
+    actualizadoEn: ahora,
+    version: 1,
+    eliminado: false,
+    dispositivo: await obtenerDispositivoId(),
+  }
+}
+
+/**
  * Siembra el administrador inicial solo si no existe ningún usuario
- * (port de `DatabaseConnection.sembrarAdministradorInicial`).
+ * (port de `DatabaseConnection.sembrarAdministradorInicial`). Queda solo
+ * en el dispositivo: no se encola para sincronizar.
  */
 export async function sembrarAdminSiNoExiste(): Promise<void> {
   const totalUsuarios = await db.usuarios.count()
   if (totalUsuarios > 0) {
     return
   }
-  const controlador = new UsuarioController()
-  // El primer usuario registrado asume rol ADMIN automáticamente.
-  await controlador.registrarUsuario(
-    ADMIN_INICIAL_USUARIO,
-    ADMIN_INICIAL_CONTRASENA,
-    ADMIN_INICIAL_INDICIO,
-    true,
-  )
+  const salt = generarSalt()
+  const usuario: Usuario = {
+    ...(await baseLocal()),
+    nombre_usuario: ADMIN_INICIAL_USUARIO,
+    tipo_usuario: TIPO_ADMIN,
+    contrasena_hash: await hashContrasena(ADMIN_INICIAL_CONTRASENA, salt),
+    salt,
+    indicio_usuario: ADMIN_INICIAL_INDICIO,
+    fecha_registro: formatFecha(new Date()),
+  }
+  await db.usuarios.put(usuario)
 }
 
 /**
  * Siembra los productos y movimientos de ejemplo solo cuando la tabla de
  * productos está vacía (port de `DatosEjemplo.sembrarSiVacio`). No pisa
- * datos reales.
+ * datos reales y los demos quedan solo en el dispositivo (sin encolar).
  */
 export async function sembrarDatosEjemplo(): Promise<boolean> {
   const productos = await db.productos.toArray()
@@ -92,12 +119,18 @@ export async function sembrarDatosEjemplo(): Promise<boolean> {
     return false
   }
 
-  const productoController = new ProductoController()
   for (const [tipo, nombre, neto, venta, stock, stockMinimo] of PRODUCTOS) {
-    const ganancia = String(venta - neto)
-    await productoController.nuevoProducto(
-      tipo, nombre, String(neto), ganancia, String(venta), String(stock), String(stockMinimo),
-    )
+    const producto: Producto = {
+      ...(await baseLocal()),
+      tipo_producto: tipo,
+      nombre_producto: nombre,
+      precio_neto: neto,
+      ganancia: venta - neto,
+      precio_venta: venta,
+      cantidad_stock: stock,
+      stock_minimo: stockMinimo,
+    }
+    await db.productos.put(producto)
   }
 
   await sembrarMovimientos()
@@ -113,7 +146,6 @@ async function sembrarMovimientos(): Promise<void> {
   lunes.setHours(0, 0, 0, 0)
   const semanaTranscurrida = diaSemana + 1
 
-  const dao = new MovimientoDao()
   for (const [dia, hora, tipo, monto, descripcion] of MOVIMIENTOS) {
     if (dia > semanaTranscurrida) {
       continue
@@ -121,11 +153,13 @@ async function sembrarMovimientos(): Promise<void> {
     const fecha = new Date(lunes)
     fecha.setDate(lunes.getDate() + (dia - 1))
     fecha.setHours(hora, 0, 0, 0)
-    await dao.insertar({
+    const movimiento: Movimiento = {
+      ...(await baseLocal()),
       tipo_movimiento: (tipo === TIPO_INGRESO_TEXTO ? 'INGRESO' : 'EGRESO') as Movimiento['tipo_movimiento'],
       monto,
       descripcion,
       fecha: formatFecha(fecha),
-    })
+    }
+    await db.movimientos.put(movimiento)
   }
 }
