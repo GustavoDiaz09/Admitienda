@@ -158,6 +158,12 @@ administrador).
   deudas** (v7): ventas fiadas por cliente con abonos parciales; cada abono
   registra un ingreso en caja y cada deuda/pago se sincroniza con Supabase
   (tablas `deudas` y `pagos_deuda`). `tsc`, lint y build limpios.
+- El CRM de deudas se **probó a mano** con `npm.cmd run dev`
+  (admin/admin123) el 09/09/2026 y quedó funcionando correctamente.
+- **Docs locales:** `README.md` y `AGENTS.md` son documentación interna del
+  proyecto (rutas locales, credenciales de ejemplo). NO se suben a GitHub; el
+  repositorio remoto solo contiene el código. `git push` se hace SOLO con el
+  consentimiento explícito del usuario.
 - Checklist de pendientes (ver «PARÁMETRO PRINCIPAL»):
   - [x] Aplicar `supabase/migracion.sql` en el proyecto remoto vía MCP
         (hecho el 09/09/2026; las 6 tablas + RLS están en `public`).
