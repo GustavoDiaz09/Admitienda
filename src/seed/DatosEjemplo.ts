@@ -22,6 +22,9 @@ export const ADMIN_INICIAL_INDICIO = 'Tienda'
  */
 export const DISPOSITIVO_SEMILLA = 'semilla-local'
 
+/** Clave de metadatos que recuerda que los datos de ejemplo ya se sembraron. */
+export const META_DATOS_EJEMPLO = 'datos_ejemplo_sembrados'
+
 /** Productos de ejemplo: tipo, nombre, costo, venta, stock, stock mínimo (COP). */
 const PRODUCTOS: ReadonlyArray<readonly [string, string, number, number, number, number]> = [
   ['Granos y abarrotes', 'Arroz blanco x500g', 2400, 2900, 40, 12],
@@ -114,14 +117,21 @@ export async function sembrarAdminSiNoExiste(): Promise<void> {
 }
 
 /**
- * Siembra los productos y movimientos de ejemplo solo cuando la tabla de
- * productos está vacía (port de `DatosEjemplo.sembrarSiVacio`). No pisa
- * datos reales y los demos quedan solo en el dispositivo (sin encolar).
+ * Siembra los productos y movimientos de ejemplo **solo la primera vez**
+ * que se abre la app en este dispositivo (port de `DatosEjemplo.sembrarSiVacio`).
+ * Un marcador en `metadatos` evita que los demos reaparezcan después de que el
+ * usuario vacía o restaura su base local: no pisa datos reales y los demos
+ * quedan solo en el dispositivo (sin encolar).
  */
 export async function sembrarDatosEjemplo(): Promise<boolean> {
+  const yaSembrado = await db.metadatos.get(META_DATOS_EJEMPLO)
+  if (yaSembrado) {
+    return false
+  }
   const productos = await db.productos.toArray()
   const activos = productos.filter((p) => !p.eliminado).length
   if (activos > 0) {
+    await db.metadatos.put({ clave: META_DATOS_EJEMPLO, valor: String(Date.now()) })
     return false
   }
 
@@ -140,6 +150,7 @@ export async function sembrarDatosEjemplo(): Promise<boolean> {
   }
 
   await sembrarMovimientos()
+  await db.metadatos.put({ clave: META_DATOS_EJEMPLO, valor: String(Date.now()) })
   return true
 }
 

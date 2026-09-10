@@ -45,6 +45,17 @@ describe('Arranque de la aplicación', () => {
     expect(await new UsuarioController().iniciarSesion('admin', 'clave-incorrecta')).toBeNull()
   })
 
+  it('no vuelve a sembrar datos de ejemplo al reabrir la app (para no resucitarlos tras descargar)', async () => {
+    await inicializarApp()
+    expect(await db.productos.count()).toBeGreaterThan(0)
+
+    await db.productos.clear()
+
+    await inicializarApp()
+
+    expect(await db.productos.count()).toBe(0)
+  })
+
   it('registra un ingreso y lo refleja en el resumen financiero', async () => {
     await inicializarApp()
     const controlador = new MovimientoController()
