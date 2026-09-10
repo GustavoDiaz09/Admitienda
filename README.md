@@ -40,14 +40,12 @@ npm.cmd test           :: pruebas Vitest (fake-indexeddb)
 
 > En Windows usar `npm.cmd`, porque PowerShell bloquea `npm.ps1`.
 
-## Credenciales iniciales
+## Credenciales
 
-| Usuario | Contraseña | Rol            |
-|---------|------------|----------------|
-| `admin` | `Gustavo1234` | Administrador |
-
-> Cambia el indicio de seguridad del admin inicial desde *Gestión de Usuarios*.
-> Si te registras antes de que exista un administrador, asumes ese rol.
+No existen credenciales por defecto: cada cuenta se crea desde *Crear cuenta*.
+La **primera persona registrada** asume automáticamente el rol de
+administrador y desde *Gestión de Usuarios* puede crear y administrar el resto
+de cuentas.
 
 ## Roles
 
@@ -67,7 +65,7 @@ sistematienda-web/
 │   ├── dao/             Persistencia Dexie/IndexedDB por entidad
 │   ├── controller/      Lógica de negocio (port de los controladores Java)
 │   ├── lib/             db, bootstrap, contraseñas, supabase, utilidades
-│   ├── seed/            Datos de ejemplo (admin inicial + 35 productos)
+│   ├── seed/            Constante de dispositivo de semilla (solo local)
 │   ├── sync/            Outbox, motor de sincronización, pull/respaldo
 │   ├── components/      ui/ (Button, Campo, Tabla…), layout/, auth/
 │   ├── views/           Páginas (Login, Productos, Resumenes, Alertas…)

@@ -46,11 +46,10 @@ src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
 - Los DAO escriben la fila **y** encolan la sincronización mediante
   `src/lib/mutaciones.ts` (persistir + `encolar` a la outbox), con
   `actualizadoEn` renovado y `version` incrementado.
-- `inicializarApp()` (en `App.tsx` en el arranque) abre la BD y siembra solo al
-  administrador inicial (`admin`/`Gustavo1234`, indicio `Tienda`) si no existe
-  ningún usuario. El registro sembrado se marca con `dispositivo: 'semilla-local'`
-  (`DISPOSITIVO_SEMILLA`) y **no** se encola ni se sube a la nube. No se siembran
-  datos de ejemplo.
+- `inicializarApp()` (en `App.tsx` en el arranque) abre la BD y deja listo el
+  identificador de dispositivo. **No se crean cuentas ni datos por defecto**:
+  el primer usuario registrado en el sistema asume el rol de administrador,
+  y el resto queda como registrado (ver `registrarUsuario`).
 
 ## 4. Modelo de datos
 
@@ -129,9 +128,10 @@ y `metadatos`).
 
 - `npm.cmd run lint` (oxlint), `npx.cmd tsc -b`, `npm.cmd test` (Vitest +
   fake-indexeddb), `npm.cmd run build`.
-- Smoke tests en `src/test/inicializacion.test.ts`: arranque+seed, login
-  `admin`/`Gustavo1234`, alta de ingreso con efecto en resúmenes, rechazo de datos
-  inválidos. Aserciones **relativas** porque el seed sembra datos.
+- Smoke tests en `src/test/inicializacion.test.ts`: arranque sin cuentas ni
+  datos por defecto, promoción del primer usuario a administrador, registro que
+  queda como REGISTRADO con admin existente, alta de ingreso con efecto en
+  resúmenes y rechazo de datos inválidos. Aserciones **relativas**.
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 

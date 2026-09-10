@@ -9,7 +9,6 @@ import { FormAuthHeader } from '../components/auth/FormAuthHeader'
 import { Button } from '../components/ui/Button'
 import { Campo, Entrada } from '../components/ui/Campo'
 import { avisarExito } from '../lib/toast'
-import { ADMIN_INICIAL_CONTRASENA } from '../seed/DatosEjemplo'
 
 /** Pantalla de inicio de sesión (pública). */
 export function Login() {
@@ -98,10 +97,6 @@ export function Login() {
           Entrar como invitado
         </Button>
       </div>
-      <p className="mt-6 text-center text-xs text-zinc-400">
-        Credenciales de acceso inicial: <span className="font-medium">admin</span> /{' '}
-        <span className="font-medium">{ADMIN_INICIAL_CONTRASENA}</span>
-      </p>
     </AuthShell>
   )
 }

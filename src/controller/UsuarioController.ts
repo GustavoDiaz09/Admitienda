@@ -39,9 +39,10 @@ export class UsuarioController {
   }
 
   /**
-   * Registra un usuario nuevo. Si solicita permiso de administrador y ya
-   * existe uno, la petición queda pendiente; si no existe ningún
-   * administrador, el primer usuario asume el rol directamente.
+   * Registra un usuario nuevo. El primer usuario registrado en el sistema
+   * asume el rol de administrador directamente; el resto queda como
+   * REGISTRADO y, si solicita permiso de administrador, su petición queda
+   * pendiente de aprobación.
    */
   async registrarUsuario(
     nombreDeUsuario: string,
@@ -78,18 +79,17 @@ export class UsuarioController {
       fecha_registro: formatFecha(new Date()),
     })
 
+    if ((await this.usuarioDao.contarAdministradores()) === 0) {
+      await this.usuarioDao.actualizar({ ...usuario, tipo_usuario: TIPO_ADMIN })
+      return Resultado.exito('Primer usuario registrado como administrador.')
+    }
     if (!solicitaAdmin) {
       return Resultado.exito('Registro exitoso. Ya puede iniciar sesión.')
     }
-    if ((await this.usuarioDao.contarAdministradores()) > 0) {
-      await this.solicitudDao.insertar(usuario.id)
-      return Resultado.exito(
-        'Usuario registrado. Su solicitud de administrador quedó pendiente de aprobación.',
-      )
-    }
-    const promovido = await this.usuarioDao.actualizar({ ...usuario, tipo_usuario: TIPO_ADMIN })
-    void promovido
-    return Resultado.exito('Usuario registrado como administrador inicial.')
+    await this.solicitudDao.insertar(usuario.id)
+    return Resultado.exito(
+      'Usuario registrado. Su solicitud de administrador quedó pendiente de aprobación.',
+    )
   }
 
   /** Indica si existe un usuario con el nombre indicado. */

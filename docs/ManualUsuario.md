@@ -8,10 +8,10 @@ o la computadora.
 ## 1. Primeros pasos
 
 1. Abre la dirección de la aplicación en el navegador.
-2. Inicia sesión con las credenciales que te entregue el administrador.
-   Por defecto existe la cuenta:
-   - Usuario: `admin`
-   - Contraseña: `Gustavo1234`
+2. Inicia sesión con la cuenta que te hayan creado o regístrate con
+   **Crear cuenta** (sección 1.1). No existen credenciales por defecto:
+   la primera persona que se registre asume automáticamente el rol de
+   administrador.
 3. Al terminar, cierra la sesión con el botón de la barra superior (esquina
    superior derecha).
 
@@ -26,9 +26,12 @@ o la computadora.
 3. Opcionalmente marca *Solicitar permiso de administrador*. Si ya existe un
    administrador, tu petición queda pendiente de aprobación.
 
-Los usuarios **registrados** pueden consultar (solo lectura) **Resúmenes**,
-**Productos** y **Deudas y pagos**; solo los administradores pueden crear,
-editar o eliminar esos registros.
+**Los usuarios** pueden consultar (solo lectura) **Resúmenes**, **Productos** y
+**Deudas y pagos**; solo los administradores pueden crear, editar o eliminar
+esos registros.
+
+> El **primer usuario registrado** del sistema se convierte en administrador
+> automáticamente. Los siguientes quedan como usuarios registrados.
 
 ### 1.2 Recuperar la contraseña
 
