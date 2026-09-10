@@ -77,6 +77,7 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
   let fallados = 0
   try {
     const pendientes = await listarPendientes()
+    const pendientesAlInicio = pendientes.length
     for (const item of pendientes) {
       if (item.intentos >= MAX_INTENTOS) {
         continue
@@ -97,6 +98,10 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
     }
     await refrescarPendientes()
     store.setUltimaSync(Date.now())
+    const restantes = await contarPendientes()
+    if (restantes > pendientesAlInicio - subidos && navigator.onLine) {
+      window.setTimeout(() => void sincronizarAhora(), 400)
+    }
   } finally {
     store.setSincronizando(false)
     void fallados
@@ -190,4 +195,8 @@ export function iniciarMotorDeSync(intervaloMs = 15000): void {
       }
     })()
   }, intervaloMs)
+
+  if (navigator.onLine) {
+    void sincronizarAhora()
+  }
 }

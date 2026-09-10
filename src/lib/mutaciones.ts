@@ -2,6 +2,7 @@ import { type Table } from 'dexie'
 import { db } from './db'
 import { obtenerDispositivoId } from '../sync/dispositivo'
 import { encolar } from '../sync/outbox'
+import { sincronizarAhora } from '../sync/syncEngine'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 /**
@@ -48,6 +49,7 @@ export async function nuevoRegistro<T extends RegistroBase>(
   } as T
   await tablaDe(tabla).put(registro)
   await encolar(tabla, registro)
+  void sincronizarAhora()
   return registro
 }
 
@@ -64,6 +66,7 @@ export async function actualizarRegistro<T extends RegistroBase>(
   }
   await tablaDe(tabla).put(actualizado)
   await encolar(tabla, actualizado)
+  void sincronizarAhora()
   return actualizado
 }
 
@@ -81,5 +84,6 @@ export async function eliminarRegistro<T extends RegistroBase>(
   }
   await tablaDe(tabla).put(actualizado)
   await encolar(tabla, actualizado)
+  void sincronizarAhora()
   return actualizado
 }
