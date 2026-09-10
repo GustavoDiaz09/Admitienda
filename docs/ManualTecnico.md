@@ -96,6 +96,17 @@ y `metadatos`).
   de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
   de modo que aun filtrándose la clave pública del proyecto nadie puede leer
   los datos.
+- **Integridad del outbox:** `src/sync/outbox.ts` clavea la cola por
+  `(tabla, id)`; al re-modificar un registro se reemplaza la versión pendiente
+  y se reinician los intentos. Al subir, `eliminarItemSiSigueIgual()` borra
+  la entrada **solo si sigue conteniendo la versión que se subió** (si cambió
+  durante la subida, la versión nueva queda pendiente y no se pierde). Las
+  entradas que agotan `MAX_INTENTOS=5` se dejan en espera y se retoman tras
+  `TIEMPO_REINTENTO_MS` (60 s).
+- **Descarga paginada:** la acción `descargar` de la Edge Function itera con
+  `.order('id').range(...)` en lotes de 1000 para no truncar tablas grandes.
+  El botón "Descargar todo" (panel de sync y Resúmenes) pide confirmación y
+  advierte cuántos cambios locales pendientes se descartarán.
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
   vistas recarguen.
 

@@ -15,6 +15,7 @@ import { obtenerLlave, guardarLlave } from '../../lib/llave'
 import { ejecutarAccionDeSync, type TipoAccionSync } from '../../lib/syncAcciones'
 import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../../sync/syncEngine'
 import { Button } from '../ui/Button'
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { cn } from '../../lib/cn'
 
 /** Indicador de sincronización: estado de red, pendientes y acciones admin. */
@@ -167,17 +168,33 @@ export function SyncIndicator() {
                   >
                     Subir todo a la nube
                   </Button>
-                  <Button
+                  <ConfirmButton
                     variante="secundario"
                     tamanio="sm"
                     className="w-full"
-                    cargando={accionActiva === 'bajar'}
                     icono={CloudArrowDown}
                     disabled={!enLinea}
-                    onClick={() => void ejecutar('bajar')}
-                  >
-                    Descargar todo de la nube
-                  </Button>
+                    accion="Descargar todo de la nube"
+                    titulo="Descargar todo de la nube"
+                    mensaje={
+                      <>
+                        Esto <strong>reemplaza sin aviso todos los datos de este
+                        dispositivo</strong> con la copia de la nube y descarta los
+                        cambios locales.
+                        {pendientes > 0 ? (
+                          <>
+                            {' '}Hay <strong>{pendientes} cambio(s) pendientes</strong>{' '}
+                            que aún no se subieron y se <strong>perderían</strong>
+                            {'.'}
+                          </>
+                        ) : (
+                          ' No hay cambios locales pendientes.'
+                        )}
+                        {' '}¿Continuar?
+                      </>
+                    }
+                    confirmar={() => void ejecutar('bajar')}
+                  />
                 </>
               ) : null}
             </div>

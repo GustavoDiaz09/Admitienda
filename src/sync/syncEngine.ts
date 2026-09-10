@@ -2,11 +2,14 @@ import { create } from 'zustand'
 import { supabaseDisponible } from '../lib/supabase'
 import { hayLlaveConfigurada } from '../lib/llave'
 import { subirRemoto, verificarRemoto } from '../lib/remoto'
-import { contarPendientes, eliminarItem, listarPendientes, marcarIntento } from './outbox'
+import { contarPendientes, eliminarItemSiSigueIgual, listarPendientes, marcarIntento, reiniciarIntento } from './outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 /** Máximo de reintentos por entrada antes de dejarla en espera. */
 const MAX_INTENTOS = 5
+
+/** Tiempo de espera (ms) antes de volver a intentar una entrada agotada. */
+const TIEMPO_REINTENTO_MS = 60_000
 
 /** Estado global de la sincronización (visible en la interfaz). */
 interface SyncState {
@@ -74,11 +77,14 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
     const pendientesAlInicio = pendientes.length
     for (const item of pendientes) {
       if (item.intentos >= MAX_INTENTOS) {
+        if (item.ultimoIntento == null || Date.now() - item.ultimoIntento >= TIEMPO_REINTENTO_MS) {
+          await reiniciarIntento(item)
+        }
         continue
       }
       try {
         await subirRemoto(item.tabla, [filaParaSupabase(item.tabla, item.registro)])
-        await eliminarItem(item)
+        await eliminarItemSiSigueIgual(item)
         subidos++
       } catch {
         await marcarIntento(item)

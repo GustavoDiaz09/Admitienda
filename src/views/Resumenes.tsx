@@ -19,6 +19,7 @@ import { ejecutarAccionDeSync } from '../lib/syncAcciones'
 import { useSyncStore } from '../sync/syncEngine'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+import { ConfirmButton } from '../components/ui/ConfirmButton'
 import { EncabezadoSeccion, Esqueleto } from '../components/ui/Base'
 import { cn } from '../lib/cn'
 
@@ -183,16 +184,32 @@ export function Resumenes() {
                 >
                   Subir todo
                 </Button>
-                <Button
+                <ConfirmButton
                   variante="secundario"
                   tamanio="sm"
                   icono={CloudArrowDown}
-                  cargando={accion === 'bajar'}
                   disabled={!enLinea}
-                  onClick={() => void ejecutar('bajar')}
-                >
-                  Descargar todo
-                </Button>
+                  accion="Descargar todo"
+                  titulo="Descargar todo de la nube"
+                  mensaje={
+                    <>
+                      Esto <strong>reemplaza sin aviso todos los datos de este
+                      dispositivo</strong> con la copia de la nube y descarta los
+                      cambios locales.
+                      {pendientes > 0 ? (
+                        <>
+                          {' '}Hay <strong>{pendientes} cambio(s) pendientes</strong>{' '}
+                          que aún no se subieron y se <strong>perderían</strong>
+                          {'.'}
+                        </>
+                      ) : (
+                        ' No hay cambios locales pendientes.'
+                      )}
+                      {' '}¿Continuar?
+                    </>
+                  }
+                  confirmar={() => void ejecutar('bajar')}
+                />
               </div>
             </div>
             </Card>

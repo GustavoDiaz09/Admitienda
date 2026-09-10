@@ -94,11 +94,26 @@ Deno.serve(async (req) => {
     if (accion === 'descargar') {
       const tablas: Record<string, unknown[]> = {}
       for (const tabla of TABLAS) {
-        const { data, error } = await supabase.from(tabla).select('*')
-        if (error) {
-          return jsonDatos(500, { error: `No se pudo descargar ${tabla}: ${error.message}` })
+        const filas: unknown[] = []
+        const TAMANO_LOTE = 1000
+        let inicio = 0
+        for (;;) {
+          const { data, error } = await supabase
+            .from(tabla)
+            .select('*')
+            .order('id', { ascending: true })
+            .range(inicio, inicio + TAMANO_LOTE - 1)
+          if (error) {
+            return jsonDatos(500, { error: `No se pudo descargar ${tabla}: ${error.message}` })
+          }
+          const lote = data ?? []
+          filas.push(...lote)
+          if (lote.length < TAMANO_LOTE) {
+            break
+          }
+          inicio += TAMANO_LOTE
         }
-        tablas[tabla] = data ?? []
+        tablas[tabla] = filas
       }
       return jsonDatos(200, tablas)
     }

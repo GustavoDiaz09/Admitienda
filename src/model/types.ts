@@ -130,6 +130,8 @@ export interface ItemOutbox {
   registro: RegistroBase
   encoladoEn: number
   intentos: number
+  /** Marca de tiempo del último intento fallido (para reaprovechar tras un alto). */
+  ultimoIntento?: number
 }
 
 /** Metadato global de la aplicación (dispositivo_id, estado de sync, etc.). */

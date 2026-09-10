@@ -14,6 +14,7 @@ interface Props {
   tamanio?: 'sm' | 'md'
   icono?: ComponentType<{ size?: number; weight?: 'bold' | 'regular' | 'fill' }>
   disabled?: boolean
+  className?: string
 }
 
 /**
@@ -29,6 +30,7 @@ export function ConfirmButton({
   tamanio = 'sm',
   icono: Icono,
   disabled,
+  className,
 }: Props) {
   const [abierto, setAbierto] = useState(false)
   const [cargando, setCargando] = useState(false)
@@ -50,6 +52,7 @@ export function ConfirmButton({
         tamanio={tamanio}
         icono={Icono}
         disabled={disabled}
+        className={className}
         onClick={() => setAbierto(true)}
       >
         {accion}
