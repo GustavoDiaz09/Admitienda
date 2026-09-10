@@ -8,11 +8,14 @@ o la computadora.
 ## 1. Primeros pasos
 
 1. Abre la dirección de la aplicación en el navegador.
-2. Inicia sesión con la cuenta que te hayan creado o regístrate con
-   **Crear cuenta** (sección 1.1). No existen credenciales por defecto:
-   la primera persona que se registre asume automáticamente el rol de
-   administrador.
-3. Al terminar, cierra la sesión con el botón de la barra superior (esquina
+2. La primera vez aparecen **datos de ejemplo** (productos, movimientos de la
+   semana y deudas fiadas) que viven **solo en tu dispositivo** y nunca se
+   suben a la nube.
+3. Inicia sesión con la cuenta de prueba **`admin` / `Gustavo1234`** o crea tu
+   propia cuenta con **Crear cuenta** (sección 1.1). No hay más credenciales
+   por defecto: la primera persona que se registre con permiso de administrador
+   asume ese rol.
+4. Al terminar, cierra la sesión con el botón de la barra superior (esquina
    superior derecha).
 
 ### 1.1 Registrarse
@@ -30,8 +33,11 @@ o la computadora.
 **Deudas y pagos**; solo los administradores pueden crear, editar o eliminar
 esos registros.
 
-> El **primer usuario registrado** del sistema se convierte en administrador
-> automáticamente. Los siguientes quedan como usuarios registrados.
+> El **primer usuario registrado** se convierte en administrador; los
+> siguientes quedan como usuario registrado (a menos que un administrador
+> apruebe su solicitud).
+> Los datos de ejemplo son locales: usa **Bajar todo** (panel de
+> sincronización) para limpiarlos y trabajar solo con datos reales.
 
 ### 1.2 Recuperar la contraseña
 

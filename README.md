@@ -42,10 +42,11 @@ npm.cmd test           :: pruebas Vitest (fake-indexeddb)
 
 ## Credenciales
 
-No existen credenciales por defecto: cada cuenta se crea desde *Crear cuenta*.
-La **primera persona registrada** asume automáticamente el rol de
-administrador y desde *Gestión de Usuarios* puede crear y administrar el resto
-de cuentas.
+Existe una cuenta inicial local **solo para probar**: `admin` / `Gustavo1234`
+(indicio `Tienda`). Los datos de ejemplo (35 productos, movimientos de la semana
+y deudas fiadas) se siembran **solo en el dispositivo** (`semilla-local`) y
+nunca se suben a la nube. Para dejar de verlos, usa **Bajar todo** en el panel de
+sincronización; no reaparecen.
 
 ## Roles
 
@@ -65,7 +66,7 @@ sistematienda-web/
 │   ├── dao/             Persistencia Dexie/IndexedDB por entidad
 │   ├── controller/      Lógica de negocio (port de los controladores Java)
 │   ├── lib/             db, bootstrap, contraseñas, supabase, utilidades
-│   ├── seed/            Constante de dispositivo de semilla (solo local)
+│   ├── seed/            Datos de ejemplo (solo locales, semilla-local)
 │   ├── sync/            Outbox, motor de sincronización, pull/respaldo
 │   ├── components/      ui/ (Button, Campo, Tabla…), layout/, auth/
 │   ├── views/           Páginas (Login, Productos, Resumenes, Alertas…)

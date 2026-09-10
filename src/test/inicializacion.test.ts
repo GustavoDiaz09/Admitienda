@@ -4,7 +4,8 @@ import { inicializarApp } from '../lib/inicializacion'
 import { UsuarioController } from '../controller/UsuarioController'
 import { ProductoController } from '../controller/ProductoController'
 import { MovimientoController } from '../controller/MovimientoController'
-import { TIPO_ADMIN, TIPO_INGRESO, TIPO_REGISTRADO } from '../model/types'
+import { ADMIN_INICIAL_CONTRASENA, DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
+import { TIPO_ADMIN, TIPO_INGRESO } from '../model/types'
 
 beforeEach(async () => {
   await db.delete()
@@ -12,36 +13,51 @@ beforeEach(async () => {
 })
 
 describe('Arranque de la aplicación', () => {
-  it('no crea ninguna cuenta ni datos por defecto', async () => {
+  it('siembra el administrador inicial, los productos y las deudas de ejemplo', async () => {
     await inicializarApp()
 
-    expect(await new UsuarioController().obtenerUsuarios()).toHaveLength(0)
-    expect(await new ProductoController().obtenerProductos()).toHaveLength(0)
-    expect(await db.movimientos.count()).toBe(0)
+    const usuarios = await new UsuarioController().obtenerUsuarios()
+    expect(usuarios.some((u) => u.nombre_usuario === 'admin')).toBe(true)
+
+    const productos = await new ProductoController().obtenerProductos()
+    expect(productos.length).toBeGreaterThan(0)
+    expect(await db.movimientos.count()).toBeGreaterThan(0)
+    expect(await db.deudas.count()).toBeGreaterThan(0)
+  })
+
+  it('deja los datos de ejemplo solo en el dispositivo: marcados como semilla y sin encolar', async () => {
+    await inicializarApp()
+
+    const sembrados = [
+      ...(await db.usuarios.toArray()),
+      ...(await db.productos.toArray()),
+      ...(await db.movimientos.toArray()),
+      ...(await db.deudas.toArray()),
+      ...(await db.pagos_deuda.toArray()),
+    ]
+    expect(sembrados.length).toBeGreaterThan(0)
+    expect(sembrados.every((r) => r.dispositivo === DISPOSITIVO_SEMILLA)).toBe(true)
     expect(await db.outbox.count()).toBe(0)
   })
 
-  it('promueve al primer usuario registrado a administrador', async () => {
+  it('permite iniciar sesión con las credenciales por defecto', async () => {
     await inicializarApp()
-    const controlador = new UsuarioController()
 
-    const resultado = await controlador.registrarUsuario('encargado', 'clave123', 'indicio', false)
-    expect(resultado.exito).toBe(true)
-
-    const usuarios = await controlador.obtenerUsuarios()
-    expect(usuarios).toHaveLength(1)
-    expect(usuarios[0].nombre_usuario).toBe('encargado')
-    expect(usuarios[0].tipo_usuario).toBe(TIPO_ADMIN)
+    const usuario = await new UsuarioController().iniciarSesion('admin', ADMIN_INICIAL_CONTRASENA)
+    expect(usuario).not.toBeNull()
+    expect(usuario?.tipo_usuario).toBe(TIPO_ADMIN)
+    expect(await new UsuarioController().iniciarSesion('admin', 'clave-incorrecta')).toBeNull()
   })
 
-  it('si ya hay un administrador, un registro sin permiso queda como REGISTRADO', async () => {
+  it('no vuelve a sembrar datos de ejemplo al reabrir la app (para no resucitarlos tras descargar)', async () => {
     await inicializarApp()
-    const controlador = new UsuarioController()
-    await controlador.registrarUsuario('admin', 'clave123', 'indicio', false)
-    await controlador.registrarUsuario('cajero', 'clave123', 'indicio', false)
+    expect(await db.productos.count()).toBeGreaterThan(0)
 
-    const cajero = await controlador.iniciarSesion('cajero', 'clave123')
-    expect(cajero?.tipo_usuario).toBe(TIPO_REGISTRADO)
+    await db.productos.clear()
+
+    await inicializarApp()
+
+    expect(await db.productos.count()).toBe(0)
   })
 
   it('registra un ingreso y lo refleja en el resumen financiero', async () => {
