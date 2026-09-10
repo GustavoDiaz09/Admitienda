@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
+import { supabaseDisponible } from '../lib/supabase'
+import { hayLlaveConfigurada } from '../lib/llave'
+import { subirRemoto, verificarRemoto } from '../lib/remoto'
 import { contarPendientes, eliminarItem, listarPendientes, marcarIntento } from './outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
@@ -38,30 +40,22 @@ export async function refrescarPendientes(): Promise<void> {
   useSyncStore.getState().setPendientes(await contarPendientes())
 }
 
-/** Verifica conectividad con Supabase sin descargar datos (solo cabeceras). */
+/** Verifica conectividad con la nube (llave válida) sin descargar datos. */
 export async function verificarConectividad(): Promise<boolean> {
-  if (!supabase) {
+  if (!supabaseDisponible() || !hayLlaveConfigurada()) {
     return false
   }
-  try {
-    const { error } = await supabase
-      .from('productos')
-      .select('id', { head: true, count: 'exact' })
-      .limit(1)
-    return !error
-  } catch {
-    return false
-  }
+  return verificarRemoto()
 }
 
 /**
- * Sube los cambios pendientes (outbox) a Supabase. El sentido es
- * unidireccional: la app nunca baja datos aquí; el pull es explícito y
- * solo lo dispara un administrador.
+ * Sube los cambios pendientes (outbox) a la nube a través de la Edge
+ * Function `sync`. El sentido es unidireccional: la app nunca baja datos
+ * aquí; el pull es explícito y solo lo dispara un administrador.
  */
 export async function sincronizarAhora(): Promise<{ subidos: number; fallados: number }> {
   const store = useSyncStore.getState()
-  if (!supabase || store.sincronizando) {
+  if (!supabaseDisponible() || !hayLlaveConfigurada() || store.sincronizando) {
     return { subidos: 0, fallados: 0 }
   }
   const enLinea = await verificarConectividad()
@@ -83,12 +77,7 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
         continue
       }
       try {
-        const { error } = await supabase
-          .from(item.tabla)
-          .upsert(filaParaSupabase(item.tabla, item.registro))
-        if (error) {
-          throw new Error(error.message)
-        }
+        await subirRemoto(item.tabla, [filaParaSupabase(item.tabla, item.registro)])
         await eliminarItem(item)
         subidos++
       } catch {
@@ -109,7 +98,7 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
   return { subidos, fallados }
 }
 
-/** Serializa un registro local para Supabase (incluye los campos de versión). */
+/** Serializa un registro local para la nube (incluye los campos de versión). */
 function filaParaSupabase(tabla: TablaSync, registro: RegistroBase): Record<string, unknown> {
   return {
     id: registro.id,
@@ -122,7 +111,7 @@ function filaParaSupabase(tabla: TablaSync, registro: RegistroBase): Record<stri
   }
 }
 
-/** Columnas propias de cada tabla para la carga a Supabase. */
+/** Columnas propias de cada tabla para la carga a la nube. */
 function columnasExtra(tabla: TablaSync, r: RegistroBase): Record<string, unknown> {
   const registro = r as unknown as Record<string, unknown>
   switch (tabla) {
@@ -190,13 +179,13 @@ export function iniciarMotorDeSync(intervaloMs = 15000): void {
     void (async () => {
       const pendientes = await contarPendientes()
       useSyncStore.getState().setPendientes(pendientes)
-      if (pendientes > 0 && navigator.onLine) {
+      if (pendientes > 0 && navigator.onLine && hayLlaveConfigurada()) {
         void sincronizarAhora()
       }
     })()
   }, intervaloMs)
 
-  if (navigator.onLine) {
+  if (navigator.onLine && hayLlaveConfigurada()) {
     void sincronizarAhora()
   }
 }

@@ -11,17 +11,20 @@ import { useSesionStore } from '../../controller/SessionController'
 import { TIPO_ADMIN } from '../../model/types'
 import { horaCorta } from '../../lib/formato'
 import { avisarExito } from '../../lib/toast'
+import { obtenerLlave, guardarLlave } from '../../lib/llave'
 import { ejecutarAccionDeSync, type TipoAccionSync } from '../../lib/syncAcciones'
-import { useSyncStore } from '../../sync/syncEngine'
+import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../../sync/syncEngine'
 import { Button } from '../ui/Button'
 import { cn } from '../../lib/cn'
 
 /** Indicador de sincronización: estado de red, pendientes y acciones admin. */
 export function SyncIndicator() {
   const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
   const { enLinea, pendientes, sincronizando, ultimaSync } = useSyncStore()
   const [abierto, setAbierto] = useState(false)
   const [accionActiva, setAccionActiva] = useState<TipoAccionSync | null>(null)
+  const [llaveTexto, setLlaveTexto] = useState(obtenerLlave())
 
   const ejecutar = async (accion: TipoAccionSync) => {
     setAccionActiva(accion)
@@ -31,6 +34,13 @@ export function SyncIndicator() {
     if (accion === 'sincronizar' && !sincronizando) {
       avisarExito('Estado de sincronización actualizado.')
     }
+  }
+
+  const guardar = async () => {
+    guardarLlave(llaveTexto)
+    avisarExito('Llave de sincronización guardada.')
+    await sincronizarAhora()
+    await refrescarPendientes()
   }
 
   return (
@@ -98,8 +108,42 @@ export function SyncIndicator() {
               </div>
             </dl>
 
-            <div className="mt-4 space-y-2 border-t border-zinc-100 pt-4">
-              <Button
+            <div className="mt-4 space-y-3 border-t border-zinc-100 pt-4">
+              {hayCuenta ? (
+                <div className="rounded-xl bg-zinc-50 p-3">
+                  <label
+                    htmlFor="llave-sincronizacion"
+                    className="block text-xs font-semibold text-zinc-700"
+                  >
+                    Llave de sincronización
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+                    Se configura una vez por dispositivo. Guarde aquí la llave que reciba del
+                    administrador.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      id="llave-sincronizacion"
+                      type="password"
+                      autoComplete="off"
+                      value={llaveTexto}
+                      onChange={(e) => setLlaveTexto(e.target.value)}
+                      placeholder={llaveTexto ? '••••••••' : 'Escriba la llave'}
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[13px] text-zinc-800 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none"
+                    />
+                    <Button
+                      variante="secundario"
+                      tamanio="sm"
+                      onClick={() => void guardar()}
+                      disabled={sincronizando || llaveTexto.trim() === obtenerLlave().trim()}
+                    >
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="space-y-2">
+                <Button
                 variante="primario"
                 tamanio="sm"
                 className="w-full"
@@ -137,6 +181,7 @@ export function SyncIndicator() {
                 </>
               ) : null}
             </div>
+          </div>
           </div>
         </>
       ) : null}

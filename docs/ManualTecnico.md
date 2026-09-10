@@ -11,7 +11,7 @@ persistencia) y las mismas reglas de negocio, pero cambia la persistencia:
 |------------------------|------------------------------------|
 | SQLite (JDBC)          | IndexedDB vía **Dexie** (local)    |
 | hoja única local       | IndexedDB local + **Supabase** (sync) |
-| contraseñas SHA-256+salt | Web Crypto, mismo formato         |
+| contraseñas PBKDF2+salt  | Web Crypto, formato versionado      |
 | Swing / `Tema.java`    | React + Tailwind v4 + componentes `src/components/ui` |
 
 ## 2. Stack
@@ -21,8 +21,9 @@ persistencia) y las mismas reglas de negocio, pero cambia la persistencia:
 - **Vite 8** con `@vitejs/plugin-react`, `@tailwindcss/vite` (Tailwind CSS v4,
   tokens en `src/index.css` con `@theme`) y `vite-plugin-pwa`
   (`registerType: 'autoUpdate'`, `generateSW`, precache de `dist/`).
-- **Dexie 4** (base local `sistematienda`), **@supabase/supabase-js**,
-  @phosphor-icons/react, @fontsource-variable/outfit.
+- **Dexie 4** (base local `sistematienda`), @phosphor-icons/react,
+  @fontsource-variable/outfit. Sin dependencia de Supabase en el cliente: el
+  transporte a la nube es `fetch` directo a la Edge Function `sync`.
 - **Vitest 5** + **fake-indexeddb** + jsdom (`vitest.config.ts`).
 - **oxlint** (`npm run lint`).
 
@@ -82,9 +83,19 @@ y `metadatos`).
   con guion bajo (`nombre_producto`) igual que las columnas de Supabase. En
   `pull.ts`, `filaExtra()` convierte los campos base al subir y `filaLocal()`
   los recompone al bajar.
-- **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo con PK
-  `id uuid` (blanco del `onConflict`) y políticas RLS abiertas a la clave anon
-  (la autenticación es local; no se usa auth de Supabase).
+- **Transporte (Edge Function `sync`, `supabase/functions/sync/`):** la app
+  no usa la clave anon. `src/lib/remoto.ts` llama a
+  `…/functions/v1/sync?accion=ping|descargar|subir` con la cabecera
+  `x-llave-sincronizacion`; la función valida la llave contra
+  `llaves_sincronizacion` (PBKDF2-HMAC-SHA-256, 210.000 iteraciones) y recién
+  entonces lee/escribe con service_role. La llave de cada dispositivo vive solo
+  en su `localStorage` (`src/lib/llave.ts`); se configura una vez en el panel
+  de sincronización.
+- **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo
+  (PK `id uuid`, blanco del `onConflict`) y `llaves_sincronizacion`. El acceso
+  de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
+  de modo que aun filtrándose la clave pública del proyecto nadie puede leer
+  los datos.
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
   vistas recarguen.
 
@@ -145,3 +156,8 @@ y `metadatos`).
   implementar.
 - La migración remota (`supabase/migracion.sql`) se aplica con una sesión del
   MCP de Supabase o pegando el archivo en el SQL Editor del proyecto.
+- La Edge Function `sync` se despliega con el MCP de Supabase
+  (`supabase_deploy_edge_function`, `verify_jwt=false`; el código del repo es
+  la fuente de verdad) y se prueba vía HTTP: `ping` con llave válida debe
+  responder 200, con llave inválida/ausente 401, y el acceso REST directo con
+  la clave anon debe quedar en 401.

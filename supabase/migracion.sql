@@ -1,6 +1,12 @@
 -- Migración de Sistema Tienda Web para Supabase (SQL Editor)
--- Crea las 4 tablas espejo usadas por la sincronización offline-first.
--- Ejecutar en el SQL Editor del proyecto sdhtlbtpwzbkbrqekzkb.
+-- Crea las 6 tablas espejo usadas por la sincronización offline-first y la
+-- tabla de llaves de sincronización. Ejecutar en el SQL Editor del proyecto.
+--
+-- ACCESO: la app NO usa la clave anon para los datos. Toda lectura/escritura
+-- pasa por la Edge Function `sync` (supabase/functions/sync), que usa
+-- service_role (omite RLS) y exige una llave de sincronización válida
+-- (PBKDF2, ver tabla `llaves_sincronizacion`). Por eso las políticas de RLS
+-- abiertas se eliminan y se revoca el acceso de anon/authenticated.
 
 -- ============================================================
 -- usuarios
@@ -71,42 +77,6 @@ create table if not exists public.solicitudes_admin (
 );
 
 -- ============================================================
--- Índices para las búsquedas más frecuentes
--- ============================================================
-create index if not exists idx_productos_nombre on public.productos (nombre_producto);
-create index if not exists idx_movimientos_fecha on public.movimientos (fecha);
-create index if not exists idx_usuarios_nombre on public.usuarios (nombre_usuario);
-create index if not exists idx_solicitudes_usuario on public.solicitudes_admin (usuario_id);
-
--- ============================================================
--- Seguridad: la autenticación es local (cada dispositivo), por lo que
--- la app accede a estas tablas con la clave anon. RLS se habilita con
--- políticas que permiten leer/escribir a cualquier cliente autenticado
--- o anónimo de este proyecto (sync sin servidor propio).
--- NOTA: si prefieres restringir, ajusta las políticas a tu caso.
--- ============================================================
-alter table public.usuarios enable row level security;
-alter table public.productos enable row level security;
-alter table public.movimientos enable row level security;
-alter table public.solicitudes_admin enable row level security;
-
-create policy "usuarios_lectura" on public.usuarios for select to anon using (true);
-create policy "usuarios_escritura" on public.usuarios for insert to anon with check (true);
-create policy "usuarios_actualizacion" on public.usuarios for update to anon using (true) with check (true);
-
-create policy "productos_lectura" on public.productos for select to anon using (true);
-create policy "productos_escritura" on public.productos for insert to anon with check (true);
-create policy "productos_actualizacion" on public.productos for update to anon using (true) with check (true);
-
-create policy "movimientos_lectura" on public.movimientos for select to anon using (true);
-create policy "movimientos_escritura" on public.movimientos for insert to anon with check (true);
-create policy "movimientos_actualizacion" on public.movimientos for update to anon using (true) with check (true);
-
-create policy "solicitudes_lectura" on public.solicitudes_admin for select to anon using (true);
-create policy "solicitudes_escritura" on public.solicitudes_admin for insert to anon with check (true);
-create policy "solicitudes_actualizacion" on public.solicitudes_admin for update to anon using (true) with check (true);
-
--- ============================================================
 -- deudas (CRM: ventas fiadas por cliente)
 -- ============================================================
 create table if not exists public.deudas (
@@ -139,19 +109,66 @@ create table if not exists public.pagos_deuda (
   dispositivo text not null default ''
 );
 
+-- ============================================================
+-- llaves_sincronizacion (llave única por dispositivo que valida la Edge
+-- Function `sync`). `llave_hash` = pbkdf2$<iter>$<hex> de (llave + salt);
+-- la llave en claro no se guarda en ningún lado.
+-- ============================================================
+create table if not exists public.llaves_sincronizacion (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null default 'Dispositivo',
+  llave_salt text not null,
+  llave_hash text not null unique,
+  fecha_creacion date not null default current_date
+);
+
+-- ============================================================
+-- Índices para las búsquedas más frecuentes
+-- ============================================================
+create index if not exists idx_productos_nombre on public.productos (nombre_producto);
+create index if not exists idx_movimientos_fecha on public.movimientos (fecha);
+create index if not exists idx_usuarios_nombre on public.usuarios (nombre_usuario);
+create index if not exists idx_solicitudes_usuario on public.solicitudes_admin (usuario_id);
 create index if not exists idx_deudas_cliente on public.deudas (cliente_nombre);
 create index if not exists idx_pagos_deuda on public.pagos_deuda (deuda_id);
 
+-- ============================================================
+-- Seguridad
+-- ============================================================
+alter table public.usuarios enable row level security;
+alter table public.productos enable row level security;
+alter table public.movimientos enable row level security;
+alter table public.solicitudes_admin enable row level security;
 alter table public.deudas enable row level security;
 alter table public.pagos_deuda enable row level security;
+alter table public.llaves_sincronizacion enable row level security;
 
-create policy "deudas_lectura" on public.deudas for select to anon using (true);
-create policy "deudas_escritura" on public.deudas for insert to anon with check (true);
-create policy "deudas_actualizacion" on public.deudas for update to anon using (true) with check (true);
+-- Sin políticas para anon/authenticated en ninguna tabla: el único acceso es
+-- por service_role desde la Edge Function `sync` (que valida la llave).
+-- Si existieran políticas abiertas previas, eliminarlas:
+drop policy if exists "usuarios_lectura" on public.usuarios;
+drop policy if exists "usuarios_escritura" on public.usuarios;
+drop policy if exists "usuarios_actualizacion" on public.usuarios;
+drop policy if exists "productos_lectura" on public.productos;
+drop policy if exists "productos_escritura" on public.productos;
+drop policy if exists "productos_actualizacion" on public.productos;
+drop policy if exists "movimientos_lectura" on public.movimientos;
+drop policy if exists "movimientos_escritura" on public.movimientos;
+drop policy if exists "movimientos_actualizacion" on public.movimientos;
+drop policy if exists "solicitudes_lectura" on public.solicitudes_admin;
+drop policy if exists "solicitudes_escritura" on public.solicitudes_admin;
+drop policy if exists "solicitudes_actualizacion" on public.solicitudes_admin;
+drop policy if exists "deudas_lectura" on public.deudas;
+drop policy if exists "deudas_escritura" on public.deudas;
+drop policy if exists "deudas_actualizacion" on public.deudas;
+drop policy if exists "pagos_lectura" on public.pagos_deuda;
+drop policy if exists "pagos_escritura" on public.pagos_deuda;
+drop policy if exists "pagos_actualizacion" on public.pagos_deuda;
 
-create policy "pagos_lectura" on public.pagos_deuda for select to anon using (true);
-create policy "pagos_escritura" on public.pagos_deuda for insert to anon with check (true);
-create policy "pagos_actualizacion" on public.pagos_deuda for update to anon using (true) with check (true);
+-- La clave anon/authenticated no tiene permisos sobre los datos.
+revoke all on public.usuarios, public.productos, public.movimientos,
+  public.solicitudes_admin, public.deudas, public.pagos_deuda,
+  public.llaves_sincronizacion from anon, authenticated;
 
 -- Nota: la clave primaria de cada tabla (id uuid) es la referencia de
 -- conflicto del upsert; NO eliminar estas restricciones.

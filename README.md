@@ -64,14 +64,15 @@ sistematienda-web/
 │   ├── model/           Tipos de dominio (Usuario, Producto, Movimiento…)
 │   ├── dao/             Persistencia Dexie/IndexedDB por entidad
 │   ├── controller/      Lógica de negocio (port de los controladores Java)
-│   ├── lib/             db, bootstrap, contraseñas (PBKDF2), supabase, utilidades
+│   ├── lib/             db, bootstrap, contraseñas (PBKDF2), llave, remoto, utilidades
 │   ├── sync/            Outbox, motor de sincronización, pull/respaldo
 │   ├── components/      ui/ (Button, Campo, Tabla…), layout/, auth/
 │   ├── views/           Páginas (Login, Productos, Resumenes, Alertas…)
 │   ├── App.tsx          Rutas, guards y arranque de la app
 │   └── test/            Pruebas Vitest
 ├── supabase/
-│   └── migracion.sql    Esquema remoto (6 tablas espejo + permisos RLS)
+│   ├── migracion.sql    Esquema remoto (6 tablas espejo + llaves + RLS)
+│   └── functions/sync/  Edge Function: puerta única a la nube (una por llave)
 ├── public/              favicon, iconos PWA (SVG + PNG)
 └── vite.config.ts       Vite + Tailwind v4 + vite-plugin-pwa
 ```
@@ -79,7 +80,9 @@ sistematienda-web/
 ## Sincronización
 
 - La **base local es la fuente de la verdad**; Supabase se usa solo para
-  intercambiar datos.
+  intercambiar datos, **a través de la Edge Function `sync`** que exige la
+  llave de sincronización de cada dispositivo (configurable en el panel de
+  sincronización; se guarda solo en el propio dispositivo).
 - Los cambios se registran en una cola (outbox) y un motor los sube en cuanto
   hay conexión (eventos del navegador + intervalo de 15 s); hasta 5 intentos.
 - Conflicto entre versiones: gana la modificación más reciente ("último write
@@ -97,10 +100,15 @@ sistematienda-web/
 
 ## Configuración de la nube (administrador)
 
-1. Crea un proyecto en Supabase y copia la URL y la clave anon a `.env`
-   (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 6 tablas y sus
-   políticas de seguridad). La autenticación es local, así que las políticas
-   permiten leer/escribir con la clave anon del proyecto.
-3. Abre la app en un segundo dispositivo con la misma config y usa **bajar
-   todo** (admin) para traer los datos.
+1. Crea un proyecto en Supabase y copia la URL a `.env`
+   (`VITE_SUPABASE_URL`). No se usa la clave anon: los datos solo se tocan con
+   la llave de sincronización por dispositivo.
+2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 6 tablas
+   espejo, `llaves_sincronizacion` y revoca el acceso de anon/authenticated).
+3. Despliega la Edge Function `sync` (código en `supabase/functions/sync/`) y
+   deja `verify_jwt` desactivado: la autenticación la hace la propia llave.
+4. Crea la primera llave insertando su hash PBKDF2 en `llaves_sincronizacion`
+   (la llave en claro se entrega solo al administrador). En cada dispositivo,
+   el propietario la escribe en el panel de sincronización.
+5. Abre la app en un segundo dispositivo con la misma URL y usa **bajar todo**
+   (admin) para traer los datos.

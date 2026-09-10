@@ -97,6 +97,10 @@ La aplicación guarda los datos en tu dispositivo y funciona sin internet. La
 sincronización la muestran el indicador de la barra superior y el panel del
 módulo de Resúmenes:
 
+- **Llave de sincronización** (se configura UNA vez por dispositivo, quien la
+  tenga puede guardar y descargar los datos): abre el indicador de
+  sincronización (arriba, a la derecha), escribe la llave que te entregó el
+  administrador y pulsa **Guardar**.
 - **Sincronizar:** sube los cambios pendientes (se hace solo cada 15 s con
   conexión, este botón lo fuerza).
 - **Subir todo:** respalda la base completa del dispositivo a la nube. Usadlo
@@ -120,7 +124,9 @@ Una vez instalada abre en pantalla completa y funciona sin conexión.
 
 - **No entran productos nuevos:** asegúrate de haber iniciado sesión con una
   cuenta de administrador (los invitados y registrados solo ven).
-- **La nube no sincroniza:** comprueba la conexión e inténtalo de nuevo
-  (el indicador de estado está arriba, a la derecha). La app no se pierde:
-  queda todo en tu dispositivo.
+- **La nube no sincroniza:** comprueba que hayas guardado la **llave de
+  sincronización** de este dispositivo en el panel de sincronización y que la
+  llave sea correcta; luego comprueba la conexión e inténtalo de nuevo (el
+  indicador de estado está arriba, a la derecha). La app no se pierde: queda
+  todo en tu dispositivo.
 - **Perdí la contraseña:** usa la recuperación con el indicio de seguridad.

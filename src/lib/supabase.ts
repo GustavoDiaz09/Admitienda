@@ -1,16 +1,14 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-
 /**
- * Cliente de Supabase. Se crea solo si están configuradas las variables
- * de entorno; si faltan, la app sigue funcionando 100 % local (offline).
+ * Configuración de Supabase. La app NO usa la clave anon para acceder a los
+ * datos: toda lectura/escritura pasa por la Edge Function `sync`, que exige
+ * la llave de sincronización de este dispositivo (ver `src/lib/remoto.ts`).
  */
-export const supabase: SupabaseClient | null =
-  url && anonKey ? createClient(url, anonKey) : null
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 
-/** Indica si hay credenciales de Supabase configuradas. */
+/** URL base del proyecto (sin barra final). */
+export const supabaseUrl = (url ?? '').replace(/\/+$/, '')
+
+/** Indica si hay un proyecto de Supabase configurado. */
 export function supabaseDisponible(): boolean {
-  return supabase !== null
+  return supabaseUrl !== ''
 }

@@ -1,4 +1,5 @@
-import { supabase } from '../lib/supabase'
+import { supabaseDisponible } from '../lib/supabase'
+import { descargarRemoto, subirRemoto } from '../lib/remoto'
 import { db } from '../lib/db'
 import { useSyncStore, refrescarPendientes } from './syncEngine'
 import { vaciarOutbox } from './outbox'
@@ -20,7 +21,7 @@ interface ResultadoPull {
   dispositivos: Set<string>
 }
 
-/** Convierte una fila de Supabase (nombres con guion bajo) a registro local. */
+/** Convierte una fila de la nube (nombres con guion bajo) a registro local. */
 function filaLocal(fila: Record<string, unknown>): RegistroBase {
   const base = {
     id: String(fila.id),
@@ -60,7 +61,7 @@ function tablaDexie(tabla: TablaSync) {
 
 /**
  * RESTAURA este dispositivo desde la nube: reemplaza TODO el contenido
- * local (cada tabla y la cola de sincronización) con la copia de Supabase.
+ * local (cada tabla y la cola de sincronización) con la copia remota.
  * Esta semántica es deliberada: el botón "Descargar todo de la nube" sirve
  * para poner un dispositivo al día exactamente con lo que hay en la nube
  * (p. ej. tras reinstalar la app) y evita que queden datos huérfanos o
@@ -73,18 +74,15 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
     tablas: 0,
     dispositivos: new Set(),
   }
-  if (!supabase) {
+  if (!supabaseDisponible()) {
     throw new Error('Supabase no está configurado. Revise las variables de entorno.')
   }
   const store = useSyncStore.getState()
   store.setError(null)
 
+  const tablas = await descargarRemoto()
   for (const tabla of TABLAS) {
-    const { data, error } = await supabase.from(tabla).select('*')
-    if (error) {
-      throw new Error(`No se pudo descargar ${tabla}: ${error.message}`)
-    }
-    const remotos = (data ?? []) as Array<Record<string, unknown>>
+    const remotos = (tablas[tabla] ?? []) as Array<Record<string, unknown>>
     const tablaLocal = tablaDexie(tabla)
     await tablaLocal.clear()
     for (const fila of remotos) {
@@ -103,12 +101,12 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
 }
 
 /**
- * Sube la base local completa a Supabase (respaldar "a mano" al primer
- * uso en un dispositivo nuevo, para que el resto pueda descargarla).
- * La base local es limpia: no contiene registros "semilla".
+ * Sube la base local completa a la nube (respaldar "a mano" al primer uso
+ * en un dispositivo nuevo, para que el resto pueda descargarla). La base
+ * local es limpia: no contiene registros "semilla".
  */
 export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
-  if (!supabase) {
+  if (!supabaseDisponible()) {
     throw new Error('Supabase no está configurado. Revise las variables de entorno.')
   }
   let subidos = 0
@@ -127,10 +125,7 @@ export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
       dispositivo: r.dispositivo,
       ...filaExtra(tabla, r),
     }))
-    const { error } = await supabase.from(tabla).upsert(filas)
-    if (error) {
-      throw new Error(`No se pudo respaldar ${tabla}: ${error.message}`)
-    }
+    await subirRemoto(tabla, filas)
     subidos += registros.length
   }
   return { subidos }
