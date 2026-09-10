@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase'
 import { db } from '../lib/db'
 import { useSyncStore, refrescarPendientes } from './syncEngine'
 import { vaciarOutbox } from './outbox'
-import { DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 export const TABLAS: TablaSync[] = [
@@ -106,8 +105,7 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
 /**
  * Sube la base local completa a Supabase (respaldar "a mano" al primer
  * uso en un dispositivo nuevo, para que el resto pueda descargarla).
- * Los registros sembrados localmente (marcados con DISPOSITIVO_SEMILLA,
- * p. ej. el administrador inicial) NO se suben: son locales.
+ * La base local es limpia: no contiene registros "semilla".
  */
 export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
   if (!supabase) {
@@ -116,9 +114,7 @@ export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
   let subidos = 0
   for (const tabla of TABLAS) {
     const tablaLocal = tablaDexie(tabla)
-    const registros = (await tablaLocal.toArray()).filter(
-      (r) => r.dispositivo !== DISPOSITIVO_SEMILLA,
-    )
+    const registros = await tablaLocal.toArray()
     if (registros.length === 0) {
       continue
     }

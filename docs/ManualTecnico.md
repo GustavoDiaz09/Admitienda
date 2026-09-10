@@ -46,13 +46,10 @@ src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
 - Los DAO escriben la fila **y** encolan la sincronización mediante
   `src/lib/mutaciones.ts` (persistir + `encolar` a la outbox), con
   `actualizadoEn` renovado y `version` incrementado.
-- `inicializarApp()` (en `App.tsx` en el arranque) siembra solo si la BD está
-  vacía: admin `admin`/`Gustavo1234` (indicio `Tienda`), 35 productos de
-  ejemplo (3 con stock bajo), los movimientos ya transcurridos de la semana en
-  curso y deudas fiadas con un abono. Los datos sembrados se marcan con
-  `dispositivo: 'semilla-local'` (`DISPOSITIVO_SEMILLA`) y **no** se encolan ni
-  se suben a la nube. Un flag en `metadatos` (`META_DATOS_EJEMPLO`) evita que
-  los demos reaparezcan tras vaciar/restaurar la base.
+- `inicializarApp()` (en `App.tsx` en el arranque) abre la BD, deja listo el
+  identificador de dispositivo y reanuda la sincronización. **No se crean
+  cuentas ni datos por defecto**: el primer usuario registrado asume el rol de
+  administrador (ver `registrarUsuario` en `src/controller/UsuarioController.ts`)
 
 ## 4. Modelo de datos
 
@@ -131,11 +128,12 @@ y `metadatos`).
 
 - `npm.cmd run lint` (oxlint), `npx.cmd tsc -b`, `npm.cmd test` (Vitest +
   fake-indexeddb), `npm.cmd run build`.
-- Smoke tests en `src/test/inicializacion.test.ts`: arranque que siembra admin,
-  productos, movimientos y deudas (todo `semilla-local` y sin outbox), login
-  `admin`/`Gustavo1234`, no-resiembra tras limpiar, alta de ingreso con efecto
-  en resúmenes y rechazo de datos inválidos. `src/test/deudas.test.ts` prueba el
-  CRM de deudas con el flag de ejemplo ya sembrado (BD aislada).
+- Smoke tests en `src/test/inicializacion.test.ts`: arranque con la BD vacía
+  (sin cuentas ni datos por defecto), promoción del primer usuario registrado a
+  administrador, registros que quedan como REGISTRADO cuando ya hay admin,
+  seguridad de promoción (solicitud pendiente, no segundo admin directo), alta
+  de ingreso con efecto en resúmenes y rechazo de datos inválidos.
+  `src/test/deudas.test.ts` prueba el CRM de deudas sobre BD aislada.
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 

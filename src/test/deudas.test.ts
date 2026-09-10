@@ -3,13 +3,11 @@ import { db } from '../lib/db'
 import { inicializarApp } from '../lib/inicializacion'
 import { DeudaController } from '../controller/DeudaController'
 import { MovimientoController } from '../controller/MovimientoController'
-import { META_DATOS_EJEMPLO } from '../seed/DatosEjemplo'
 import { TIPO_INGRESO } from '../model/types'
 
 beforeEach(async () => {
   await db.delete()
   await db.open()
-  await db.metadatos.put({ clave: META_DATOS_EJEMPLO, valor: 'test' })
 })
 
 describe('CRM de deudas', () => {
