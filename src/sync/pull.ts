@@ -106,8 +106,8 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
 /**
  * Sube la base local completa a Supabase (respaldar "a mano" al primer
  * uso en un dispositivo nuevo, para que el resto pueda descargarla).
- * Los datos de ejemplo (marcados con DISPOSITIVO_SEMILLA) NO se suben:
- * son una demo local y no deben contaminar la nube.
+ * Los registros sembrados localmente (marcados con DISPOSITIVO_SEMILLA,
+ * p. ej. el administrador inicial) NO se suben: son locales.
  */
 export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
   if (!supabase) {

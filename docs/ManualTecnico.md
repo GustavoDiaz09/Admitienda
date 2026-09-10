@@ -46,11 +46,11 @@ src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
 - Los DAO escriben la fila **y** encolan la sincronización mediante
   `src/lib/mutaciones.ts` (persistir + `encolar` a la outbox), con
   `actualizadoEn` renovado y `version` incrementado.
-- `inicializarApp()` (en `App.tsx` en el arranque) abre la BD y siembra solo si
-  está vacía: admin `admin`/`Gustavo1234` (indicio `Tienda`) y 35 productos de
-  ejemplo (3 con stock bajo) más los movimientos ya transcurridos de la semana
-  en curso. Los datos sembrados se marcan con `dispositivo: 'semilla-local'`
-  (`DISPOSITIVO_SEMILLA`) y **no** se encolan ni se suben a la nube.
+- `inicializarApp()` (en `App.tsx` en el arranque) abre la BD y siembra solo al
+  administrador inicial (`admin`/`Gustavo1234`, indicio `Tienda`) si no existe
+  ningún usuario. El registro sembrado se marca con `dispositivo: 'semilla-local'`
+  (`DISPOSITIVO_SEMILLA`) y **no** se encola ni se sube a la nube. No se siembran
+  datos de ejemplo.
 
 ## 4. Modelo de datos
 

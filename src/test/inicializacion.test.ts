@@ -13,26 +13,24 @@ beforeEach(async () => {
 })
 
 describe('Arranque de la aplicación', () => {
-  it('siembra el administrador inicial y los productos de ejemplo', async () => {
+  it('siembra al administrador inicial sin datos de ejemplo', async () => {
     await inicializarApp()
 
     const usuarios = await new UsuarioController().obtenerUsuarios()
     expect(usuarios.some((u) => u.nombre_usuario === 'admin')).toBe(true)
 
     const productos = await new ProductoController().obtenerProductos()
-    expect(productos.length).toBeGreaterThan(0)
+    expect(productos.length).toBe(0)
   })
 
-  it('deja los datos de ejemplo solo en el dispositivo: marcados como semilla y sin encolar', async () => {
+  it('siembra solo al administrador: local (semilla) y sin encolar', async () => {
     await inicializarApp()
 
-    const sembrados = [
-      ...(await db.usuarios.toArray()),
-      ...(await db.productos.toArray()),
-      ...(await db.movimientos.toArray()),
-    ]
-    expect(sembrados.length).toBeGreaterThan(0)
-    expect(sembrados.every((r) => r.dispositivo === DISPOSITIVO_SEMILLA)).toBe(true)
+    const usuarios = await db.usuarios.toArray()
+    expect(usuarios.length).toBeGreaterThan(0)
+    expect(usuarios.every((u) => u.dispositivo === DISPOSITIVO_SEMILLA)).toBe(true)
+    expect(await db.productos.count()).toBe(0)
+    expect(await db.movimientos.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
   })
 
@@ -43,17 +41,6 @@ describe('Arranque de la aplicación', () => {
     expect(usuario).not.toBeNull()
     expect(usuario?.tipo_usuario).toBe(TIPO_ADMIN)
     expect(await new UsuarioController().iniciarSesion('admin', 'clave-incorrecta')).toBeNull()
-  })
-
-  it('no vuelve a sembrar datos de ejemplo al reabrir la app (para no resucitarlos tras descargar)', async () => {
-    await inicializarApp()
-    expect(await db.productos.count()).toBeGreaterThan(0)
-
-    await db.productos.clear()
-
-    await inicializarApp()
-
-    expect(await db.productos.count()).toBe(0)
   })
 
   it('registra un ingreso y lo refleja en el resumen financiero', async () => {
