@@ -132,7 +132,16 @@ Reglas de negocio de integridad:
   entonces lee/escribe con service_role. La llave de cada dispositivo vive solo
   en su `localStorage` (`src/lib/llave.ts`); se configura una vez en el panel
   de sincronización. `llamar()` admite además query params
-  (`descargarRemoto(desde?)` pasa `desde` únicamente si `> 0`).
+  (`descargarRemoto(desde?)` pasa `desde` únicamente si `> 0`) y lanza
+  `ErrorRemoto` con `estado` HTTP y `definitivo` (los 4xx no se reintentan).
+- **Validación de carga en la nube:** la acción `subir` valida cada lote antes
+  de tocar la BD — numerosos campos por tabla (allow-list `ESQUEMAS` en la
+  Edge Function), tipos/rangos/enumerados espejo del cliente (`esMonto` exige
+  hasta 2 decimales), formato de fechas `yyyy-MM-dd HH:mm`, UIDs válidos,
+  `version >= 1` y límites por petición (`MAX_FILAS`, `MAX_TAMANO_CUERPO`).
+  Un lote inválido responde **400** con el id de la fila y el campo; uno que
+  excede límites responde **413**; una violación de unicidad sigue en **409**.
+  Nada basura puede entrar a la fuente compartida que cada dispositivo fusiona.
 - **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo
   (PK `id uuid`, blanco del `onConflict`) y `llaves_sincronizacion`. El acceso
   de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
@@ -145,6 +154,12 @@ Reglas de negocio de integridad:
   durante la subida, la versión nueva queda pendiente y no se pierde). Las
   entradas que agotan `MAX_INTENTOS=5` se dejan en espera y se retoman tras
   `TIEMPO_REINTENTO_MS` (60 s).
+- **Rechazos definitivos no se reintentan:** si `subirRemoto` responde un
+  `ErrorRemoto` **4xx** (400/409/413/422), la entrada sale de la cola con
+  `descartarItem()` (solo si sigue conteniendo la versión rechazada) y el
+  motivo queda visible en el `error` del store de sincronización; el registro
+  local se conserva. Los 5xx, los fallos de red y los 401 (`ErrorRemoto` con
+  `definitivo=false`) se comportan como antes (intento, espera y reintento).
 - **Descarga paginada e incremental en la nube:** la acción `descargar` de la
   Edge Function itera con `.order('id').range(...)` en lotes de 1000 para no
   truncar tablas grandes; si viene el query param `desde` (epoch ms finito y
@@ -216,6 +231,9 @@ Reglas de negocio de integridad:
   Colombia; `pull.test.ts` cubre la fusión LWW (nube más reciente, local más
   reciente, empate y tumbas) contra la outbox y el cursor de descarga
   incremental (`obtenerCursorDescarga`/`guardarCursorDescarga`).
+  `outbox.test.ts` cubre también `descartarItem` (rechazo definitivo) y
+  `remoto.test.ts` la clasificación de `ErrorRemoto` (4xx definitivo vs
+  transitorio).
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 

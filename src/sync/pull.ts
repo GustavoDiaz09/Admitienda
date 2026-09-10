@@ -25,6 +25,9 @@ interface ResultadoPull {
 /** Clave del metadato que guarda la marca desde la que se bajó la nube. */
 const CLAVE_CURSOR = 'ultima_descarga'
 
+/** Tamaño de lote para descargas y para subir la base completa. */
+const TAMANO_LOTE = 1000
+
 /**
  * Marca de tiempo (epoch ms) de la última descarga exitosa. Se usa como
  * cursor incremental: solo se vuelve a bajar lo modificado después de él.
@@ -202,7 +205,9 @@ export async function respaldarTodoEnServidor(): Promise<{ subidos: number }> {
       dispositivo: r.dispositivo,
       ...filaExtra(tabla, r),
     }))
-    await subirRemoto(tabla, filas)
+    for (let i = 0; i < filas.length; i += TAMANO_LOTE) {
+      await subirRemoto(tabla, filas.slice(i, i + TAMANO_LOTE))
+    }
     subidos += registros.length
   }
   return { subidos }

@@ -119,6 +119,11 @@ módulo de Resúmenes:
 > versión más reciente. Los importes se escriben en formato colombiano (punto
 > para miles y coma para decimales: "2.500" o "1.250,50").
 
+> Si la nube rechaza un dato (por ejemplo, un nombre de usuario que ya existe
+> en otro dispositivo), la aplicación deja de intentarlo y muestra el motivo en
+> el panel de sincronización; el dato sigue en tu dispositivo pero no viaja a
+> los demás.
+
 ## 9. Instalar la aplicación (PWA)
 
 - **Computadora (Chrome/Edge):** icono de instalar en la barra de direcciones

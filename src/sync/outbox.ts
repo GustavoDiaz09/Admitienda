@@ -65,6 +65,17 @@ export async function reiniciarIntento(item: ItemOutbox): Promise<void> {
   await db.outbox.update(item.id, { intentos: 0 })
 }
 
+/**
+ * Elimina una entrada de la cola tras un rechazo DEFINITIVO de la nube
+ * (4xx): reenviarlo jamás tendrá éxito. Solo se borra si sigue conteniendo
+ * la versión rechazada; si el registro se volvió a modificar mientras
+ * volaba, la versión nueva se conserva para que se intente una vez más.
+ * El registro local se mantiene: si se edita de nuevo, `encolar` reintenta.
+ */
+export async function descartarItem(item: ItemOutbox): Promise<void> {
+  await eliminarItemSiSigueIgual(item)
+}
+
 /** Vacía toda la cola de sincronización (uso en la restauración desde la nube). */
 export async function vaciarOutbox(): Promise<void> {
   await db.outbox.clear()

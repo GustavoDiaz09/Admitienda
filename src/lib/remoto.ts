@@ -12,6 +12,24 @@ import type { TablaSync } from '../model/types'
 /** Resultado de una descarga completa: filas por tabla. */
 export type DescargaRemota = Record<string, Array<Record<string, unknown>>>
 
+/**
+ * Error del transporte hacia la nube. `estado` es el código HTTP de la
+ * respuesta; `definitivo` indica que no tiene sentido reintentar: un 4xx
+ * (payload inválido, conflicto de unicidad, llave, límites) nunca tendrá
+ * éxito reenviándolo, mientras que un 5xx o un fallo de red son transitorios.
+ */
+export class ErrorRemoto extends Error {
+  readonly estado: number
+  readonly definitivo: boolean
+
+  constructor(mensaje: string, estado = 0) {
+    super(mensaje)
+    this.name = 'ErrorRemoto'
+    this.estado = estado
+    this.definitivo = estado >= 400 && estado < 500
+  }
+}
+
 async function llamar(
   accion: string,
   cuerpo?: unknown,
@@ -60,7 +78,7 @@ async function llamar(
       datos != null && typeof datos === 'object' && 'error' in datos
         ? String((datos as { error: unknown }).error)
         : `La nube respondió con el estado ${respuesta.status}.`
-    throw new Error(mensaje)
+    throw new ErrorRemoto(mensaje, respuesta.status)
   }
   return datos
 }

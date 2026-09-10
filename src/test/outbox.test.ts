@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../lib/db'
-import { encolar, listarPendientes, eliminarItemSiSigueIgual, marcarIntento } from '../sync/outbox'
+import {
+  encolar,
+  listarPendientes,
+  eliminarItemSiSigueIgual,
+  marcarIntento,
+  descartarItem,
+} from '../sync/outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 beforeEach(async () => {
@@ -73,5 +79,27 @@ describe('Outbox: carrera de sincronización', () => {
     expect(pendientes[0].intentos).toBe(1)
     expect(pendientes[0].ultimoIntento).toBeDefined()
     expect(Date.now() - (pendientes[0].ultimoIntento ?? 0)).toBeLessThan(2000)
+  })
+
+  it('descartarItem vacía la cola cuando la versión rechazada sigue pendiente', async () => {
+    await encolar('usuarios', registro('abc', 1, 100))
+    const [item] = await listarPendientes()
+
+    await descartarItem(item)
+
+    expect(await listarPendientes()).toHaveLength(0)
+  })
+
+  it('descartarItem conserva la versión nueva si el registro cambió tras el rechazo', async () => {
+    await encolar('usuarios', registro('abc', 1, 100))
+    const [itemViejo] = await listarPendientes()
+
+    await encolar('usuarios', registro('abc', 2, 200))
+
+    await descartarItem(itemViejo)
+
+    const pendientes = await listarPendientes()
+    expect(pendientes).toHaveLength(1)
+    expect(pendientes[0].registro.version).toBe(2)
   })
 })

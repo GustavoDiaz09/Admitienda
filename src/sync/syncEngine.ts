@@ -1,9 +1,16 @@
 import { create } from 'zustand'
 import { supabaseDisponible } from '../lib/supabase'
 import { hayLlaveConfigurada } from '../lib/llave'
-import { subirRemoto, verificarRemoto } from '../lib/remoto'
+import { ErrorRemoto, subirRemoto, verificarRemoto } from '../lib/remoto'
 import { traerDatosDelServidor } from './pull'
-import { contarPendientes, eliminarItemSiSigueIgual, listarPendientes, marcarIntento, reiniciarIntento } from './outbox'
+import {
+  contarPendientes,
+  descartarItem,
+  eliminarItemSiSigueIgual,
+  listarPendientes,
+  marcarIntento,
+  reiniciarIntento,
+} from './outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 /** Máximo de reintentos por entrada antes de dejarla en espera. */
@@ -124,8 +131,16 @@ export async function sincronizarAhora(): Promise<{ subidos: number; fallados: n
         await subirRemoto(item.tabla, [filaParaSupabase(item.tabla, item.registro)])
         await eliminarItemSiSigueIgual(item)
         subidos++
-      } catch {
-        await marcarIntento(item)
+      } catch (error) {
+        if (error instanceof ErrorRemoto && error.definitivo) {
+          // Rechazo irreversible (400/409/413/422): reenviar jamás tendrá
+          // éxito. Se saca de la cola y el mensaje queda visible en el
+          // estado de sincronización; el registro local se conserva.
+          await descartarItem(item)
+          store.setError(error.message)
+        } else {
+          await marcarIntento(item)
+        }
         fallados++
       }
     }
