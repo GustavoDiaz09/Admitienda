@@ -106,11 +106,13 @@ módulo de Resúmenes:
   conexión, este botón lo fuerza).
 - **Subir todo:** respalda la base completa del dispositivo a la nube. Usadlo
   la primera vez para que otra computadora/celular pueda copiar los datos.
-- **Bajar todo (solo administrador):** reemplaza los datos locales con los de
-  la nube. Déjalo para cuando configures un dispositivo nuevo.
+- **Bajar todo (solo administrador):** fusiona la nube con este dispositivo.
+  En cada dato gana la versión más reciente y no se pierden los cambios
+  locales pendientes; úsalo cuando configures un dispositivo nuevo.
 
 > Regla de conflictos: si un dato fue modificado en dos lugares, gana la
-> versión más reciente.
+> versión más reciente. Los importes se escriben en formato colombiano (punto
+> para miles y coma para decimales: "2.500" o "1.250,50").
 
 ## 9. Instalar la aplicación (PWA)
 

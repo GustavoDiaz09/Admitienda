@@ -1,8 +1,8 @@
 import { supabaseDisponible } from '../lib/supabase'
 import { descargarRemoto, subirRemoto } from '../lib/remoto'
 import { db } from '../lib/db'
-import { useSyncStore, refrescarPendientes } from './syncEngine'
-import { vaciarOutbox } from './outbox'
+import { useSyncStore, refrescarPendientes, sincronizarAhora } from './syncEngine'
+import { contarPendientes, idOutbox } from './outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
 export const TABLAS: TablaSync[] = [
@@ -17,6 +17,7 @@ export const TABLAS: TablaSync[] = [
 interface ResultadoPull {
   recibidos: number
   actualizados: number
+  conflictos: number
   tablas: number
   dispositivos: Set<string>
 }
@@ -60,17 +61,62 @@ function tablaDexie(tabla: TablaSync) {
 }
 
 /**
- * RESTAURA este dispositivo desde la nube: reemplaza TODO el contenido
- * local (cada tabla y la cola de sincronización) con la copia remota.
- * Esta semántica es deliberada: el botón "Descargar todo de la nube" sirve
- * para poner un dispositivo al día exactamente con lo que hay en la nube
- * (p. ej. tras reinstalar la app) y evita que queden datos huérfanos o
- * duplicados locales. Solo lo dispara un administrador de forma explícita.
+ * Aplica las filas remotas de una tabla con "último write gana" (LWW):
+ * - Si la nube tiene una versión más reciente (misma `actualizadoEn` o
+ *   mayor, desempate por `version`), la versión remota reemplaza a la
+ *   local y se cancela la edición local pendiente de ese registro.
+ * - Si es local la más reciente, se conserva la copia local y su entrada
+ *   en la cola de sincronización, para que suba en el siguiente ciclo.
+ * - Un registro con la misma marca y versión lo gana la nube (fuente de
+ *   verdad en empates).
+ *
+ * Devuelve el total de filas recibidas, las aplicadas de la nube y los
+ * conflictos de unicidad local que no pudieron aplicarse.
+ */
+export async function aplicarRemotos(
+  tabla: TablaSync,
+  remotos: Array<Record<string, unknown>>,
+): Promise<{ recibidos: number; actualizados: number; conflictos: number }> {
+  const tablaLocal = tablaDexie(tabla)
+  let recibidos = 0
+  let actualizados = 0
+  let conflictos = 0
+  for (const fila of remotos) {
+    const remoto = filaLocal(fila)
+    recibidos++
+    const local = await tablaLocal.get(remoto.id)
+    const ganaRemoto =
+      !local ||
+      remoto.actualizadoEn > local.actualizadoEn ||
+      (remoto.actualizadoEn === local.actualizadoEn && remoto.version >= local.version)
+    if (!ganaRemoto) {
+      continue
+    }
+    try {
+      await tablaLocal.put(remoto as never)
+    } catch {
+      // Choque con una restricción local (p. ej. dos registros con el
+      // mismo nombre de usuario): se omite la fila y se deshace lo demás.
+      conflictos++
+      continue
+    }
+    await db.outbox.delete(idOutbox(tabla, remoto.id))
+    actualizados++
+  }
+  return { recibidos, actualizados, conflictos }
+}
+
+/**
+ * Baja las filas de la nube y las fusiona con la copia local (LWW) para
+ * este dispositivo. No descarta datos locales: lo que esté más reciente
+ * (nube o dispositivo) se conserva, y los cambios locales pendientes que
+ * sigan ganando se re-intentan al terminar.
  */
 export async function traerDatosDelServidor(): Promise<ResultadoPull> {
   const resultado: ResultadoPull = {
     recibidos: 0,
     actualizados: 0,
+    conflictos: 0,
     tablas: 0,
     dispositivos: new Set(),
   }
@@ -83,19 +129,20 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
   const tablas = await descargarRemoto()
   for (const tabla of TABLAS) {
     const remotos = (tablas[tabla] ?? []) as Array<Record<string, unknown>>
-    const tablaLocal = tablaDexie(tabla)
-    await tablaLocal.clear()
+    const aplicados = await aplicarRemotos(tabla, remotos)
+    resultado.recibidos += aplicados.recibidos
+    resultado.actualizados += aplicados.actualizados
+    resultado.conflictos += aplicados.conflictos
     for (const fila of remotos) {
-      const remoto = filaLocal(fila)
-      resultado.recibidos++
-      resultado.dispositivos.add(remoto.dispositivo)
-      await tablaLocal.put(remoto as never)
-      resultado.actualizados++
+      resultado.dispositivos.add(String(fila.dispositivo ?? ''))
     }
     resultado.tablas++
   }
-  await vaciarOutbox()
   await refrescarPendientes()
+  const pendientes = await contarPendientes()
+  if (pendientes > 0) {
+    void sincronizarAhora()
+  }
   store.setUltimaSync(Date.now())
   return resultado
 }

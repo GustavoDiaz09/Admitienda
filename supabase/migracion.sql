@@ -13,7 +13,7 @@
 -- ============================================================
 create table if not exists public.usuarios (
   id uuid primary key default gen_random_uuid(),
-  nombre_usuario text not null,
+  nombre_usuario text not null unique,
   tipo_usuario text not null,
   contrasena_hash text not null,
   salt text not null,
@@ -127,7 +127,13 @@ create table if not exists public.llaves_sincronizacion (
 -- ============================================================
 create index if not exists idx_productos_nombre on public.productos (nombre_producto);
 create index if not exists idx_movimientos_fecha on public.movimientos (fecha);
-create index if not exists idx_usuarios_nombre on public.usuarios (nombre_usuario);
+-- Nombre de usuario único sin distinción de mayúsculas/minúsculas
+-- (regla de negocio: una cuenta usable por ese nombre en toda la nube).
+-- Si la tabla se creó antes con data duplicada, esta instrucción falla y
+-- hay que limpiar los duplicados primero.
+create unique index if not exists uq_usuarios_nombre on public.usuarios (lower(nombre_usuario));
+-- El índice simple por nombre pasa a ser redundante; se mantiene solo como
+-- índice no único de respaldo en caso de que la migración se interrumpa.
 create index if not exists idx_solicitudes_usuario on public.solicitudes_admin (usuario_id);
 create index if not exists idx_deudas_cliente on public.deudas (cliente_nombre);
 create index if not exists idx_pagos_deuda on public.pagos_deuda (deuda_id);

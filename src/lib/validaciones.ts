@@ -12,13 +12,45 @@ export function textoNoVacio(valor: string | null | undefined, nombreCampo: stri
   return ''
 }
 
+/**
+ * Normaliza un importe escrito en formato español de Colombia a una cadena
+ * que `Number()` pueda interpretar. Reglas:
+ * - El punto separa miles y la coma es el decimal ("1.250,50" -> "1250.50").
+ * - Si conviven ambos, el punto se desecha y la coma pasa a ser decimal.
+ * - Con un solo separador: si el grupo siguiente tiene 1-2 dígitos es
+ *   decimal ("2.5", "1234,56"); si todos los grupos tienen 3 dígitos son
+ *   miles ("2.500" -> "2500", "1.000.000" -> "1000000").
+ * - Sin separador se devuelve igual ("2500").
+ */
+export function normalizarMonto(texto: string | null | undefined): string {
+  const limpio = (texto ?? '').trim()
+  if (limpio.includes('.') && limpio.includes(',')) {
+    return limpio.replace(/\./g, '').replace(',', '.')
+  }
+  if (limpio.includes('.')) {
+    return normalizarSeparador(limpio, '.')
+  }
+  if (limpio.includes(',')) {
+    return normalizarSeparador(limpio, ',')
+  }
+  return limpio
+}
+
+function normalizarSeparador(valor: string, separador: string): string {
+  const partes = valor.split(separador)
+  if (partes.length > 1 && partes.slice(1).every((p) => /^\d{3}$/.test(p))) {
+    return partes.join('')
+  }
+  return valor.replace(separador, '.')
+}
+
 /** Valida que un texto sea un número no negativo (importe monetario). */
 export function montoPositivo(valor: string, nombreCampo: string): string {
   const error = textoNoVacio(valor, nombreCampo)
   if (error) {
     return error
   }
-  const monto = Number(valor.replace(',', '.'))
+  const monto = Number(normalizarMonto(valor))
   if (Number.isNaN(monto)) {
     return `El campo ${nombreCampo} debe contener un número válido.`
   }
@@ -44,9 +76,9 @@ export function enteroNoNegativo(valor: string, nombreCampo: string): string {
   return ''
 }
 
-/** Convierte un texto a número, tolerando la coma como separador decimal. */
+/** Convierte un texto a número, tolerando el formato es-CO (miles y coma). */
 export function aDouble(valor: string): number {
-  return Number(valor.trim().replace(',', '.'))
+  return Number(normalizarMonto(valor))
 }
 
 /** Convierte un texto a entero. */

@@ -1,8 +1,8 @@
-import type { Movimiento, TipoMovimiento } from '../model/types'
+import { type Movimiento, type TipoMovimiento } from '../model/types'
 import { MovimientoDao } from '../dao/MovimientoDao'
 import { Resultado } from './Resultado'
 import { aDouble, acumularErrores, montoPositivo, textoNoVacio } from '../lib/validaciones'
-import { formatFecha, parseFecha } from '../lib/fecha'
+import { formatFecha, OFFSET_COLOMBIA_MS, parseFecha } from '../lib/fecha'
 import { TIPO_INGRESO, TIPO_EGRESO } from '../model/types'
 
 /**
@@ -87,13 +87,17 @@ export class MovimientoController {
 
   /** Resumen de la semana actual: clave 1..7 (lunes a domingo) -> saldo neto. */
   async obtenerResumenSemanal(): Promise<Map<number, number>> {
-    const hoy = new Date()
-    const lunes = new Date(hoy)
-    const diaSemana = (hoy.getDay() + 6) % 7
-    lunes.setDate(hoy.getDate() - diaSemana)
-    lunes.setHours(0, 0, 0, 0)
-    const lunesProximo = new Date(lunes)
-    lunesProximo.setDate(lunes.getDate() + 7)
+    // El calendario se calcula en hora de Colombia, no en la del dispositivo.
+    const ahoraCol = new Date(Date.now() - OFFSET_COLOMBIA_MS)
+    const diaSemanaCol = (ahoraCol.getUTCDay() + 6) % 7
+    const lunes = new Date(
+      Date.UTC(
+        ahoraCol.getUTCFullYear(),
+        ahoraCol.getUTCMonth(),
+        ahoraCol.getUTCDate() - diaSemanaCol,
+      ) + OFFSET_COLOMBIA_MS,
+    )
+    const lunesProximo = new Date(lunes.getTime() + 7 * 86_400_000)
 
     const resumen = new Map<number, number>()
     for (let dia = 1; dia <= 7; dia++) {
@@ -101,9 +105,10 @@ export class MovimientoController {
     }
     const movimientos = await this.movimientoDao.obtenerTodos()
     for (const m of movimientos) {
-      const fecha = parseFecha(m.fecha)
-      if (fecha >= lunes && fecha < lunesProximo) {
-        const diaDeLaSemana = (fecha.getDay() + 6) % 7 + 1
+      const instante = parseFecha(m.fecha)
+      if (instante >= lunes && instante < lunesProximo) {
+        const enColombia = new Date(instante.getTime() - OFFSET_COLOMBIA_MS)
+        const diaDeLaSemana = (enColombia.getUTCDay() + 6) % 7 + 1
         resumen.set(diaDeLaSemana, (resumen.get(diaDeLaSemana) ?? 0) + this.montoConSigno(m))
       }
     }
@@ -112,16 +117,16 @@ export class MovimientoController {
 
   /** Resumen del año actual: clave 1..12 (mes) -> saldo neto. */
   async obtenerResumenMensual(): Promise<Map<number, number>> {
-    const anioActual = new Date().getFullYear()
+    const anioCol = new Date(Date.now() - OFFSET_COLOMBIA_MS).getUTCFullYear()
     const resumen = new Map<number, number>()
     for (let mes = 1; mes <= 12; mes++) {
       resumen.set(mes, 0)
     }
     const movimientos = await this.movimientoDao.obtenerTodos()
     for (const m of movimientos) {
-      const fecha = parseFecha(m.fecha)
-      if (fecha.getFullYear() === anioActual) {
-        const mes = fecha.getMonth() + 1
+      const enColombia = new Date(parseFecha(m.fecha).getTime() - OFFSET_COLOMBIA_MS)
+      if (enColombia.getUTCFullYear() === anioCol) {
+        const mes = enColombia.getUTCMonth() + 1
         resumen.set(mes, (resumen.get(mes) ?? 0) + this.montoConSigno(m))
       }
     }

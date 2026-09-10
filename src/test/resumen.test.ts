@@ -3,25 +3,29 @@ import { db } from '../lib/db'
 import { MovimientoController } from '../controller/MovimientoController'
 import { MovimientoDao } from '../dao/MovimientoDao'
 import { TIPO_INGRESO } from '../model/types'
-import { formatFecha } from '../lib/fecha'
+import { formatFecha, OFFSET_COLOMBIA_MS } from '../lib/fecha'
 
 beforeEach(async () => {
   await db.delete()
   await db.open()
 })
 
+/**
+ * Instantes de la semana "actual" calculados en hora de Colombia (UTC-5),
+ * independientes de la zona horaria del equipo donde corren los tests.
+ */
 function fechasDeSemanaActual(): { lunes: Date; domingo: Date; lunesProximo: Date } {
-  const hoy = new Date()
-  const diaSemana = (hoy.getDay() + 6) % 7
-  const lunes = new Date(hoy)
-  lunes.setDate(hoy.getDate() - diaSemana)
-  lunes.setHours(0, 0, 0, 0)
-  const domingo = new Date(lunes)
-  domingo.setDate(lunes.getDate() + 6)
-  domingo.setHours(20, 30, 0, 0)
-  const lunesProximo = new Date(lunes)
-  lunesProximo.setDate(lunes.getDate() + 7)
-  lunesProximo.setHours(0, 30, 0, 0)
+  const ahoraCol = new Date(Date.now() - OFFSET_COLOMBIA_MS)
+  const diaCol = (ahoraCol.getUTCDay() + 6) % 7
+  const lunes = new Date(
+    Date.UTC(
+      ahoraCol.getUTCFullYear(),
+      ahoraCol.getUTCMonth(),
+      ahoraCol.getUTCDate() - diaCol,
+    ) + OFFSET_COLOMBIA_MS,
+  )
+  const domingo = new Date(lunes.getTime() + 6 * 86_400_000 + (20 * 3_600 + 30 * 60) * 1000)
+  const lunesProximo = new Date(lunes.getTime() + 7 * 86_400_000 + 30 * 60 * 1000)
   return { lunes, domingo, lunesProximo }
 }
 

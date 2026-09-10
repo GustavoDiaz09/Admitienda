@@ -46,7 +46,13 @@ src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
 
 - Los DAO escriben la fila **y** encolan la sincronización mediante
   `src/lib/mutaciones.ts` (persistir + `encolar` a la outbox), con
-  `actualizadoEn` renovado y `version` incrementado.
+  `actualizadoEn` renovado y `version` incrementado. Las operaciones aceptan un
+  `ContextoEscritura` opcional (`ahora`, `dispositivo`, `silencioso`) para
+  componer varias escrituras dentro de una sola transacción Dexie: cuando el
+  contexto es `silencioso`, el disparo de `sincronizarAhora()` se aplaza hasta
+  el commit del conjunto. `DeudaController.registrarAbono` y `eliminarDeuda`
+  ejecutan sus escrituras (pago, deuda, movimiento + encolados) dentro de
+  `db.transaction(...)`: o se aplican todas atómicamente, o ninguna.
 - `inicializarApp()` (en `App.tsx` en el arranque) abre la BD, deja listo el
   identificador de dispositivo y reanuda la sincronización. **No se crean
   cuentas ni datos por defecto**: el primer usuario registrado asume el rol de
@@ -68,6 +74,23 @@ Cada tabla local comparte campos base (camelCase, de sincronización):
 Tablas: `usuarios`, `productos`, `movimientos`, `solicitudes_admin` (+ `outbox`
 y `metadatos`).
 
+Reglas de negocio de integridad:
+
+- **`usuarios.nombre_usuario` es único** dentro del dispositivo (índice Dexie
+  `&nombre_usuario`, esquema v3) y en la nube (`create unique index
+  uq_usuarios_nombre on usuarios (lower(nombre_usuario))`). La Edge Function
+  devuelve **409** cuando un `subir` choca con el índice (~ código 23505) para
+  distinguir el conflicto de un error transitorio.
+- **Importes en formato es-CO:** `src/lib/validaciones.ts` (`normalizarMonto`)
+  interpreta el punto como separador de miles y la coma como decimal
+  ("2.500" → 2500, "1.250,50" → 1250.5, "1234,56" → 1234.56). Lo usan
+  `montoPositivo` y `aDouble`.
+- **Fechas en hora de Colombia (UTC-5, sin DST):** `src/lib/fecha.ts` guarda y
+  lee las fechas como "yyyy-MM-dd HH:mm" colombiana mediante aritmética UTC
+  (`OFFSET_COLOMBIA_MS`), de modo que un movimiento se lee igual desde
+  cualquier zona horaria; los resúmenes semanal/mensual de
+  `MovimientoController` se centran en el calendario de Colombia.
+
 ## 5. Sincronización (Supabase)
 
 - **Unidireccional por defecto:** los cambios locales suben solos; el pull
@@ -76,9 +99,16 @@ y `metadatos`).
   (`src/sync/syncEngine.ts`) reacciona a `online`/`offline` y corre en intervalo
   de 15 s: `sincronizarAhora()` sube los pendientes y actualiza el store Zustand
   (`enLinea`, `pendientes`, `sincronizando`, `ultimaSync`, `error`).
-- **Pull (admin):** `traerDatosDelServidor()` descarga todo y hace *merge*
-  local con LWW (`actualizadoEn`, en empate `version`). `respaldarTodoEnServidor()`
-  sube la base completa (primer poblamiento de una tienda).
+- **Pull administrado con LWW:** `traerDatosDelServidor()` descarga las 6
+  tablas y las fusiona en la base local mediante `aplicarRemotos()`
+  (`src/sync/pull.ts`): en cada registro gana la versión más reciente
+  (`actualizadoEn`, en empate `version`). Si gana la nube, la copia local se
+  reemplaza **y se cancela** la edición local pendiente de ese registro en la
+  outbox; si gana el dispositivo, su copia y su entrada de cola se conservan y
+  se re-intentan al final. No se descartan datos locales. Los choques con la
+  restricción local de unicidad se omiten y se cuentan como `conflictos`.
+  `respaldarTodoEnServidor()` sube la base completa (primer poblamiento de una
+  tienda).
 - **Mapeo de nombres:** en Dexie los campos base son camelCase y los de negocio
   con guion bajo (`nombre_producto`) igual que las columnas de Supabase. En
   `pull.ts`, `filaExtra()` convierte los campos base al subir y `filaLocal()`
@@ -106,7 +136,7 @@ y `metadatos`).
 - **Descarga paginada:** la acción `descargar` de la Edge Function itera con
   `.order('id').range(...)` en lotes de 1000 para no truncar tablas grandes.
   El botón "Descargar todo" (panel de sync y Resúmenes) pide confirmación y
-  advierte cuántos cambios locales pendientes se descartarán.
+  fusiona la nube con el dispositivo sin descartar datos locales.
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
   vistas recarguen.
 
@@ -166,6 +196,10 @@ y `metadatos`).
   seguridad de promoción (solicitud pendiente, no segundo admin directo), alta
   de ingreso con efecto en resúmenes y rechazo de datos inválidos.
   `src/test/deudas.test.ts` prueba el CRM de deudas sobre BD aislada.
+  `src/test/validaciones.test.ts` y `fechas.test.ts` cubren `normalizarMonto` y
+  el round-trip UTC de Colombia; `resumen.test.ts` valida la semana en hora de
+  Colombia; `pull.test.ts` cubre la fusión LWW (nube más reciente, local más
+  reciente, empate y tumbas) contra la outbox.
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 

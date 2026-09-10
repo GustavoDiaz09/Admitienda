@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { actualizarRegistro, eliminarRegistro, nuevoRegistro } from '../lib/mutaciones'
+import { actualizarRegistro, eliminarRegistro, nuevoRegistro, type ContextoEscritura } from '../lib/mutaciones'
 import type { Deuda, RegistroBase } from '../model/types'
 
 /** Datos de una deuda nueva antes de sellar el registro (saldo = monto). */
@@ -10,20 +10,20 @@ type DatosDeudaNueva = Omit<Deuda, keyof RegistroBase | 'saldo'>
  */
 export class DeudaDao {
   /** Crea una deuda nueva (monto = saldo inicial) y la encola para sync. */
-  async insertar(datos: DatosDeudaNueva): Promise<Deuda> {
-    return nuevoRegistro('deudas', { ...datos, saldo: datos.monto })
+  async insertar(datos: DatosDeudaNueva, contexto?: ContextoEscritura): Promise<Deuda> {
+    return nuevoRegistro('deudas', { ...datos, saldo: datos.monto }, contexto)
   }
 
   /** Modifica una deuda existente y encola el cambio. */
-  async actualizar(deuda: Deuda): Promise<Deuda> {
-    return actualizarRegistro('deudas', deuda)
+  async actualizar(deuda: Deuda, contexto?: ContextoEscritura): Promise<Deuda> {
+    return actualizarRegistro('deudas', deuda, contexto)
   }
 
   /** Borrado lógico de una deuda (se propaga vía sincronización). */
-  async eliminar(idDeRegistro: string): Promise<void> {
+  async eliminar(idDeRegistro: string, contexto?: ContextoEscritura): Promise<void> {
     const deuda = await this.buscarPorId(idDeRegistro)
     if (deuda) {
-      await eliminarRegistro('deudas', deuda)
+      await eliminarRegistro('deudas', deuda, contexto)
     }
   }
 

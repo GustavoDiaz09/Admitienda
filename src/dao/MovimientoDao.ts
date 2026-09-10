@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { nuevoRegistro, actualizarRegistro, eliminarRegistro } from '../lib/mutaciones'
+import { nuevoRegistro, actualizarRegistro, eliminarRegistro, type ContextoEscritura } from '../lib/mutaciones'
 import type { Movimiento, RegistroBase } from '../model/types'
 
 /**
@@ -8,20 +8,23 @@ import type { Movimiento, RegistroBase } from '../model/types'
  */
 export class MovimientoDao {
   /** Registra un movimiento nuevo y lo encola para sincronizar. */
-  async insertar(datos: Omit<Movimiento, keyof RegistroBase>): Promise<Movimiento> {
-    return nuevoRegistro('movimientos', datos)
+  async insertar(
+    datos: Omit<Movimiento, keyof RegistroBase>,
+    contexto?: ContextoEscritura,
+  ): Promise<Movimiento> {
+    return nuevoRegistro('movimientos', datos, contexto)
   }
 
   /** Modifica un movimiento existente y encola el cambio. */
-  async actualizar(movimiento: Movimiento): Promise<Movimiento> {
-    return actualizarRegistro('movimientos', movimiento)
+  async actualizar(movimiento: Movimiento, contexto?: ContextoEscritura): Promise<Movimiento> {
+    return actualizarRegistro('movimientos', movimiento, contexto)
   }
 
   /** Borrado lógico de un movimiento (se propaga vía sincronización). */
-  async eliminar(idDeRegistro: string): Promise<void> {
+  async eliminar(idDeRegistro: string, contexto?: ContextoEscritura): Promise<void> {
     const movimiento = await this.buscarPorId(idDeRegistro)
     if (movimiento) {
-      await eliminarRegistro('movimientos', movimiento)
+      await eliminarRegistro('movimientos', movimiento, contexto)
     }
   }
 

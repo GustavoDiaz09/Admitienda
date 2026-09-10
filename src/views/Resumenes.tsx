@@ -153,7 +153,7 @@ export function Resumenes() {
                 </h2>
                 <p className="mt-0.5 max-w-lg text-sm text-zinc-500">
                   {enLinea
-                    ? 'Los cambios se suben automáticamente a la nube. Use "Subir todo" para respaldar la base completa o "Descargar todo" en un dispositivo nuevo (reemplaza la copia local con la de la nube).'
+                    ? 'Los cambios se suben automáticamente a la nube. Use "Subir todo" para respaldar la base completa o "Descargar todo" para fusionar la nube con este dispositivo (gana la versión más reciente).'
                     : 'Sin conexión: los cambios quedan guardados localmente y se sincronizarán al recuperar la red.'}
                 </p>
                 <p className="mt-1.5 text-xs font-medium text-zinc-500">
@@ -193,18 +193,10 @@ export function Resumenes() {
                   titulo="Descargar todo de la nube"
                   mensaje={
                     <>
-                      Esto <strong>reemplaza sin aviso todos los datos de este
-                      dispositivo</strong> con la copia de la nube y descarta los
-                      cambios locales.
-                      {pendientes > 0 ? (
-                        <>
-                          {' '}Hay <strong>{pendientes} cambio(s) pendientes</strong>{' '}
-                          que aún no se subieron y se <strong>perderían</strong>
-                          {'.'}
-                        </>
-                      ) : (
-                        ' No hay cambios locales pendientes.'
-                      )}
+                      Se <strong>bajarán todos los datos de la nube y se
+                      fusionarán</strong> con los de este dispositivo: en
+                      cada registro gana la versión más reciente, sin
+                      eliminar los cambios locales pendientes.
                       {' '}¿Continuar?
                     </>
                   }

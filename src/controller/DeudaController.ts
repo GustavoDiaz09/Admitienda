@@ -6,6 +6,9 @@ import { Resultado } from './Resultado'
 import { aDouble, acumularErrores, montoPositivo, textoNoVacio } from '../lib/validaciones'
 import { formatFecha } from '../lib/fecha'
 import { moneda } from '../lib/formato'
+import { db } from '../lib/db'
+import { obtenerDispositivoId } from '../sync/dispositivo'
+import { sincronizarAhora } from '../sync/syncEngine'
 import { TIPO_INGRESO } from '../model/types'
 
 /**
@@ -44,62 +47,107 @@ export class DeudaController {
 
   /**
    * Aplica un abono a una deuda: descuenta el saldo y registra un ingreso
-   * en la caja (movimiento) por el mismo monto.
+   * en la caja (movimiento) por el mismo monto. Las tres escrituras (pago,
+   * deuda y movimiento) y su encolado para sincronizar se ejecutan dentro
+   * de una misma transacción Dexie: o se aplican todas, o ninguna.
    */
   async registrarAbono(
     idDeDeuda: string,
     monto: string,
     descripcion: string,
   ): Promise<Resultado> {
-    const deuda = await this.deudaDao.buscarPorId(idDeDeuda)
-    if (!deuda) {
-      return Resultado.error('La deuda no existe o ya fue eliminada.')
-    }
     const errores: string[] = []
     acumularErrores(errores, montoPositivo(monto, 'monto'))
-    if (deuda.saldo <= 0) {
-      errores.push('Esta deuda ya está saldada.')
-    }
     const montoAbono = aDouble(monto)
     if (errores.length === 0 && montoAbono <= 0) {
       errores.push('El abono debe ser mayor a 0.')
-    }
-    if (errores.length === 0 && montoAbono > deuda.saldo) {
-      errores.push(`El abono supera el saldo pendiente (${moneda(deuda.saldo)}).`)
     }
     if (errores.length > 0) {
       return Resultado.error(errores.join('\n'))
     }
 
-    const nuevoSaldo = deuda.saldo - montoAbono
-    const fecha = formatFecha(new Date())
+    const contexto = {
+      silencioso: true,
+      dispositivo: await obtenerDispositivoId(),
+    }
+    let deudaActualizada: Deuda | undefined
+    try {
+      await db.transaction(
+        'rw',
+        [db.pagos_deuda, db.deudas, db.movimientos, db.outbox],
+        async () => {
+          const deuda = await this.deudaDao.buscarPorId(idDeDeuda)
+          if (!deuda) {
+            throw new Error('La deuda no existe o ya fue eliminada.')
+          }
+          if (deuda.saldo <= 0) {
+            throw new Error('Esta deuda ya está saldada.')
+          }
+          if (montoAbono > deuda.saldo) {
+            throw new Error(`El abono supera el saldo pendiente (${moneda(deuda.saldo)}).`)
+          }
+          const nuevoSaldo = deuda.saldo - montoAbono
+          const fecha = formatFecha(new Date())
+          const contextoConMarca = { ...contexto, ahora: Date.now() }
 
-    await this.pagoDao.insertar({
-      deuda_id: deuda.id,
-      monto: montoAbono,
-      descripcion: (descripcion.trim() || 'Abono a cuenta').trim(),
-      fecha,
-    })
-    await this.deudaDao.actualizar({ ...deuda, saldo: nuevoSaldo })
-    await this.movimientoDao.insertar({
-      tipo_movimiento: TIPO_INGRESO,
-      monto: montoAbono,
-      descripcion: `Pago de deuda de ${deuda.cliente_nombre}${descripcion.trim() ? `: ${descripcion.trim()}` : ''}`,
-      fecha,
-    })
+          await this.pagoDao.insertar(
+            {
+              deuda_id: deuda.id,
+              monto: montoAbono,
+              descripcion: (descripcion.trim() || 'Abono a cuenta').trim(),
+              fecha,
+            },
+            contextoConMarca,
+          )
+          deudaActualizada = await this.deudaDao.actualizar(
+            { ...deuda, saldo: nuevoSaldo },
+            contextoConMarca,
+          )
+          await this.movimientoDao.insertar(
+            {
+              tipo_movimiento: TIPO_INGRESO,
+              monto: montoAbono,
+              descripcion: `Pago de deuda de ${deuda.cliente_nombre}${descripcion.trim() ? `: ${descripcion.trim()}` : ''}`,
+              fecha,
+            },
+            contextoConMarca,
+          )
+        },
+      )
+    } catch (error) {
+      return Resultado.error(error instanceof Error ? error.message : 'No se pudo registrar el abono.')
+    }
 
-    const texto = nuevoSaldo <= 0 ? 'y la deuda quedó saldada.' : `. Saldo pendiente: ${moneda(nuevoSaldo)}.`
+    void sincronizarAhora()
+    const saldoRestante = deudaActualizada?.saldo ?? 0
+    const texto = saldoRestante <= 0 ? 'y la deuda quedó saldada.' : `. Saldo pendiente: ${moneda(saldoRestante)}.`
     return Resultado.exito(`Abono de ${moneda(montoAbono)} registrado${texto}`)
   }
 
-  /** Elimina una deuda (borrado lógico) junto con sus pagos. */
+  /** Elimina una deuda (borrado lógico) junto con sus pagos, atómicamente. */
   async eliminarDeuda(idDeRegistro: string): Promise<Resultado> {
-    const deuda = await this.deudaDao.buscarPorId(idDeRegistro)
-    if (!deuda) {
-      return Resultado.error('La deuda no existe o ya fue eliminada.')
+    const contexto = {
+      silencioso: true,
+      dispositivo: await obtenerDispositivoId(),
+      ahora: Date.now(),
     }
-    await this.deudaDao.eliminar(idDeRegistro)
-    await this.pagoDao.eliminarPorDeuda(idDeRegistro)
+    try {
+      await db.transaction(
+        'rw',
+        [db.deudas, db.pagos_deuda, db.outbox],
+        async () => {
+          const deuda = await this.deudaDao.buscarPorId(idDeRegistro)
+          if (!deuda) {
+            throw new Error('La deuda no existe o ya fue eliminada.')
+          }
+          await this.deudaDao.eliminar(deuda.id, contexto)
+          await this.pagoDao.eliminarPorDeuda(deuda.id, contexto)
+        },
+      )
+    } catch (error) {
+      return Resultado.error(error instanceof Error ? error.message : 'No se pudo eliminar la deuda.')
+    }
+    void sincronizarAhora()
     return Resultado.exito('Deuda eliminada correctamente.')
   }
 

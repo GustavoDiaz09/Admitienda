@@ -34,9 +34,11 @@ export async function ejecutarAccionDeSync(accion: TipoAccionSync): Promise<void
     }
     const resultado = await traerDatosDelServidor()
     await refrescarPendientes()
-    avisarExito(
-      `Dispositivo restaurado desde la nube: ${resultado.recibidos} registro(s) recibidos.`,
-    )
+    let mensaje = `Dispositivo sincronizado con la nube: ${resultado.recibidos} registro(s) revisados, ${resultado.actualizados} actualizados.`
+    if (resultado.conflictos > 0) {
+      mensaje += ` ${resultado.conflictos} conflicto(s) local(es) no aplicado(s).`
+    }
+    avisarExito(mensaje)
     window.dispatchEvent(new Event(EVENTO_DATOS))
   } catch (error) {
     avisarError(error instanceof Error ? error.message : 'Error de sincronización.')

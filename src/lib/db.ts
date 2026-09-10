@@ -47,6 +47,18 @@ export class TiendaDatabase extends Dexie {
       outbox: 'id, tabla, encoladoEn',
       metadatos: 'clave',
     })
+    // v3: el nombre de usuario es único dentro del dispositivo (misma
+    // regla que la nube, donde el índice lower(nombre_usuario) es UNIQUE).
+    this.version(3).stores({
+      usuarios: 'id, &nombre_usuario, actualizadoEn',
+      productos: 'id, nombre_producto, tipo_producto, actualizadoEn',
+      movimientos: 'id, tipo_movimiento, fecha, actualizadoEn',
+      solicitudes_admin: 'id, usuario_id, estado, actualizadoEn',
+      deudas: 'id, cliente_nombre, actualizadoEn',
+      pagos_deuda: 'id, deuda_id, actualizadoEn',
+      outbox: 'id, tabla, encoladoEn',
+      metadatos: 'clave',
+    })
   }
 }
 

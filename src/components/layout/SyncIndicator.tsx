@@ -178,18 +178,10 @@ export function SyncIndicator() {
                     titulo="Descargar todo de la nube"
                     mensaje={
                       <>
-                        Esto <strong>reemplaza sin aviso todos los datos de este
-                        dispositivo</strong> con la copia de la nube y descarta los
-                        cambios locales.
-                        {pendientes > 0 ? (
-                          <>
-                            {' '}Hay <strong>{pendientes} cambio(s) pendientes</strong>{' '}
-                            que aún no se subieron y se <strong>perderían</strong>
-                            {'.'}
-                          </>
-                        ) : (
-                          ' No hay cambios locales pendientes.'
-                        )}
+                        Se <strong>bajarán todos los datos de la nube y se
+                        fusionarán</strong> con los de este dispositivo: en
+                        cada registro gana la versión más reciente, sin
+                        eliminar los cambios locales pendientes.
                         {' '}¿Continuar?
                       </>
                     }

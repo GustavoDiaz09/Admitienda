@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { eliminarRegistro, nuevoRegistro } from '../lib/mutaciones'
+import { eliminarRegistro, nuevoRegistro, type ContextoEscritura } from '../lib/mutaciones'
 import type { PagoDeuda, RegistroBase } from '../model/types'
 
 /**
@@ -7,18 +7,21 @@ import type { PagoDeuda, RegistroBase } from '../model/types'
  */
 export class PagoDeudaDao {
   /** Registra un abono nuevo y lo encola para sincronizar. */
-  async insertar(datos: Omit<PagoDeuda, keyof RegistroBase>): Promise<PagoDeuda> {
-    return nuevoRegistro('pagos_deuda', datos)
+  async insertar(
+    datos: Omit<PagoDeuda, keyof RegistroBase>,
+    contexto?: ContextoEscritura,
+  ): Promise<PagoDeuda> {
+    return nuevoRegistro('pagos_deuda', datos, contexto)
   }
 
   /** Borra lógicamente todos los pagos de una deuda (al eliminar la deuda). */
-  async eliminarPorDeuda(idDeDeuda: string): Promise<void> {
+  async eliminarPorDeuda(idDeDeuda: string, contexto?: ContextoEscritura): Promise<void> {
     const pagos = await db.pagos_deuda
       .where('deuda_id')
       .equals(idDeDeuda)
       .toArray()
     for (const pago of pagos.filter((p) => !p.eliminado)) {
-      await eliminarRegistro('pagos_deuda', pago)
+      await eliminarRegistro('pagos_deuda', pago, contexto)
     }
   }
 

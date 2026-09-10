@@ -144,7 +144,17 @@ Deno.serve(async (req) => {
       }
       const { error } = await supabase.from(cuerpo.tabla as string).upsert(cuerpo.filas)
       if (error) {
-        return jsonDatos(500, { error: `No se pudo guardar: ${error.message}` })
+        // 23505 = violación de unicidad (p. ej. nombre_usuario ya existe
+        // en la nube desde otro dispositivo). Se responde 409 para que el
+        // cliente lo distinga de un fallo transitorio del servidor.
+        const esConflicto =
+          typeof error.code === 'string' &&
+          (error.code === '23505' || error.code.startsWith('23P'))
+        return jsonDatos(esConflicto ? 409 : 500, {
+          error: esConflicto
+            ? 'Ya existe un registro con el mismo nombre en la nube (conflicto de unicidad).'
+            : `No se pudo guardar: ${error.message}`,
+        })
       }
       return jsonDatos(200, { ok: true, subidas: cuerpo.filas.length })
     }

@@ -13,6 +13,23 @@ import type { RegistroBase, TablaSync } from '../model/types'
  *    a Supabase cuando haya conexión.
  */
 
+/**
+ * Contexto opcional de una escritura. Permite componer varias operaciones
+ * dentro de una misma transacción Dexie: las marca de tiempo y el
+ * dispositivo se resuelven una sola vez fuera de la transacción, y
+ * `silencioso` aplaza el disparo de `sincronizarAhora()` hasta que el
+ * conjunto completo haya hecho commit (las escrituras parciales no deben
+ * subirse a la nube).
+ */
+export interface ContextoEscritura {
+  /** Marca de tiempo (ms) para sellar el registro. Por defecto Date.now(). */
+  ahora?: number
+  /** Identificador del dispositivo. Por defecto el propio dispositivo. */
+  dispositivo?: string
+  /** Si es true, no dispara sincronizarAhora() al escribir. */
+  silencioso?: boolean
+}
+
 /** Resuelve la tabla Dexie correspondiente a un nombre de tabla. */
 function tablaDe(tabla: TablaSync): Table<RegistroBase, string> {
   switch (tabla) {
@@ -35,9 +52,10 @@ function tablaDe(tabla: TablaSync): Table<RegistroBase, string> {
 export async function nuevoRegistro<T extends RegistroBase>(
   tabla: TablaSync,
   datos: Omit<T, keyof RegistroBase> & { id?: string },
+  contexto?: ContextoEscritura,
 ): Promise<T> {
-  const ahora = Date.now()
-  const dispositivo = await obtenerDispositivoId()
+  const ahora = contexto?.ahora ?? Date.now()
+  const dispositivo = contexto?.dispositivo ?? (await obtenerDispositivoId())
   const registro = {
     id: datos.id ?? crypto.randomUUID(),
     creadoEn: ahora,
@@ -49,7 +67,9 @@ export async function nuevoRegistro<T extends RegistroBase>(
   } as T
   await tablaDe(tabla).put(registro)
   await encolar(tabla, registro)
-  void sincronizarAhora()
+  if (!contexto?.silencioso) {
+    void sincronizarAhora()
+  }
   return registro
 }
 
@@ -57,16 +77,19 @@ export async function nuevoRegistro<T extends RegistroBase>(
 export async function actualizarRegistro<T extends RegistroBase>(
   tabla: TablaSync,
   registro: T,
+  contexto?: ContextoEscritura,
 ): Promise<T> {
   const actualizado = {
     ...registro,
-    actualizadoEn: Date.now(),
+    actualizadoEn: contexto?.ahora ?? Date.now(),
     version: registro.version + 1,
-    dispositivo: await obtenerDispositivoId(),
+    dispositivo: contexto?.dispositivo ?? (await obtenerDispositivoId()),
   }
   await tablaDe(tabla).put(actualizado)
   await encolar(tabla, actualizado)
-  void sincronizarAhora()
+  if (!contexto?.silencioso) {
+    void sincronizarAhora()
+  }
   return actualizado
 }
 
@@ -74,16 +97,19 @@ export async function actualizarRegistro<T extends RegistroBase>(
 export async function eliminarRegistro<T extends RegistroBase>(
   tabla: TablaSync,
   registro: T,
+  contexto?: ContextoEscritura,
 ): Promise<T> {
   const actualizado = {
     ...registro,
-    actualizadoEn: Date.now(),
+    actualizadoEn: contexto?.ahora ?? Date.now(),
     version: registro.version + 1,
     eliminado: true,
-    dispositivo: await obtenerDispositivoId(),
+    dispositivo: contexto?.dispositivo ?? (await obtenerDispositivoId()),
   }
   await tablaDe(tabla).put(actualizado)
   await encolar(tabla, actualizado)
-  void sincronizarAhora()
+  if (!contexto?.silencioso) {
+    void sincronizarAhora()
+  }
   return actualizado
 }
