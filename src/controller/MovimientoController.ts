@@ -92,8 +92,8 @@ export class MovimientoController {
     const diaSemana = (hoy.getDay() + 6) % 7
     lunes.setDate(hoy.getDate() - diaSemana)
     lunes.setHours(0, 0, 0, 0)
-    const domingo = new Date(lunes)
-    domingo.setDate(lunes.getDate() + 6)
+    const lunesProximo = new Date(lunes)
+    lunesProximo.setDate(lunes.getDate() + 7)
 
     const resumen = new Map<number, number>()
     for (let dia = 1; dia <= 7; dia++) {
@@ -102,7 +102,7 @@ export class MovimientoController {
     const movimientos = await this.movimientoDao.obtenerTodos()
     for (const m of movimientos) {
       const fecha = parseFecha(m.fecha)
-      if (fecha >= lunes && fecha <= domingo) {
+      if (fecha >= lunes && fecha < lunesProximo) {
         const diaDeLaSemana = (fecha.getDay() + 6) % 7 + 1
         resumen.set(diaDeLaSemana, (resumen.get(diaDeLaSemana) ?? 0) + this.montoConSigno(m))
       }

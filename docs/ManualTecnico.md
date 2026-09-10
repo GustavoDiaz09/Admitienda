@@ -126,6 +126,12 @@ y `metadatos`).
   `SoloConCuenta` en resumenes/deudas; los botones de modificación se ocultan
   según `esAdmin` en las vistas. Solicitudes de permiso en `solicitudes_admin`
   (pendiente/aprobada/rechazada).
+- **Decisión global del administrador (AL-05):** el primer admin no se decide
+  por dispositivo. Al registrarse, `UsuarioController` consulta la Edge
+  Function (`accion=hay_admin`) y solo promueve si la nube confirma que NO hay
+  ningún administrador. Si la nube ya tiene uno, o no se puede confirmar (sin
+  llave / sin conexión), el usuario queda `REGISTRADO` y su solicitud queda
+  pendiente de aprobación. (`verificarAdminRemoto` se inyecta en los tests.)
 - Campo de seguridad: cada usuario registra **palabras clave** (`indicio_usuario`)
   que se usan en el flujo de recuperación (`RecuperarContrasena`). En el
   registro y edición de usuario se muestra la advertencia de que deben ser

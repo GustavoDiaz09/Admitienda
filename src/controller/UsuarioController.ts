@@ -13,6 +13,7 @@ import {
 } from '../lib/password'
 import { textoNoVacio } from '../lib/validaciones'
 import { formatFecha } from '../lib/fecha'
+import { hayAdminRemoto } from '../lib/remoto'
 
 /**
  * Controlador de usuarios (port de `tienda.controller.UserController`):
@@ -51,16 +52,21 @@ export class UsuarioController {
   }
 
   /**
-   * Registra un usuario nuevo. El primer usuario registrado en el sistema
-   * asume el rol de administrador directamente; el resto queda como
-   * REGISTRADO y, si solicita permiso de administrador, su petición queda
-   * pendiente de aprobación.
+   * Registra un usuario nuevo. El rol de administrador se decide de forma
+   * GLOBAL (mirando la nube, no solo este dispositivo): solo el primer
+   * usuario del sistema —cuando la nube confirma que no hay ningún
+   * administrador— asume el rol directamente. Si la nube ya tiene uno, o no
+   * se puede confirmar (sin llave/sin conexión), el usuario queda como
+   * REGISTRADO y su solicitud de permiso queda pendiente de aprobación.
+   * `verificarAdminRemoto` es inyectable para pruebas; por defecto consulta
+   * la Edge Function `sync` (acción `hay_admin`).
    */
   async registrarUsuario(
     nombreDeUsuario: string,
     contrasena: string,
     indicio: string,
     solicitaAdmin: boolean,
+    verificarAdminRemoto: () => Promise<boolean | null> = hayAdminRemoto,
   ): Promise<Resultado> {
     const errorNombre = textoNoVacio(nombreDeUsuario, 'nombre de usuario')
     if (errorNombre) {
@@ -92,8 +98,28 @@ export class UsuarioController {
     })
 
     if ((await this.usuarioDao.contarAdministradores()) === 0) {
-      await this.usuarioDao.actualizar({ ...usuario, tipo_usuario: TIPO_ADMIN })
-      return Resultado.exito('Primer usuario registrado como administrador.')
+      const hayAdmin = await verificarAdminRemoto()
+      if (hayAdmin === false) {
+        await this.usuarioDao.actualizar({ ...usuario, tipo_usuario: TIPO_ADMIN })
+        return Resultado.exito('Primer usuario registrado como administrador.')
+      }
+      if (solicitaAdmin) {
+        await this.solicitudDao.insertar(usuario.id)
+        return hayAdmin === null
+          ? Resultado.exito(
+              'Usuario registrado como REGISTRADO: la nube no confirmó si existía un ' +
+                'administrador, así que no se otorgó el permiso. Cuando el dispositivo ' +
+                'sincronice, un administrador podrá aprobar su solicitud.',
+            )
+          : Resultado.exito(
+              'Usuario registrado. Su solicitud de administrador quedó pendiente de aprobación.',
+            )
+      }
+      return Resultado.exito(
+        hayAdmin === null
+          ? 'Registro exitoso (sin permisos de administrador: la nube no pudo confirmarse).'
+          : 'Registro exitoso. Ya puede iniciar sesión.',
+      )
     }
     if (!solicitaAdmin) {
       return Resultado.exito('Registro exitoso. Ya puede iniciar sesión.')

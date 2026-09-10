@@ -91,6 +91,17 @@ Deno.serve(async (req) => {
       return jsonDatos(200, { ok: true })
     }
 
+    if (accion === 'hay_admin') {
+      const { count, error } = await supabase
+        .from('usuarios')
+        .select('id', { count: 'exact', head: true })
+        .eq('tipo_usuario', 'ADMIN')
+      if (error) {
+        return jsonDatos(500, { error: `No se pudo consultar: ${error.message}` })
+      }
+      return jsonDatos(200, { hay: (count ?? 0) > 0 })
+    }
+
     if (accion === 'descargar') {
       const tablas: Record<string, unknown[]> = {}
       for (const tabla of TABLAS) {

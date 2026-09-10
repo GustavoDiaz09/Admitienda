@@ -83,3 +83,23 @@ export async function subirRemoto(tabla: TablaSync, filas: unknown[]): Promise<v
   }
   await llamar('subir', { tabla, filas })
 }
+
+/**
+ * Indica si la nube ya tiene algún administrador (`true`/`false`). Devuelve
+ * `null` si el dispositivo no puede confirmarlo (sin llave, sin conexión o
+ * error de red): en ese caso no corresponde otorgar el rol por decisión local.
+ */
+export async function hayAdminRemoto(): Promise<boolean | null> {
+  if (!supabaseDisponible() || !obtenerLlave()) {
+    return null
+  }
+  try {
+    const datos = await llamar('hay_admin')
+    if (datos != null && typeof datos === 'object' && 'hay' in datos) {
+      return Boolean((datos as { hay: unknown }).hay)
+    }
+  } catch {
+    // Intencional: sin verificación no se otorga ningún permiso.
+  }
+  return null
+}

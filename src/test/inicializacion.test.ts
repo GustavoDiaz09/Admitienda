@@ -26,7 +26,13 @@ describe('Arranque de la aplicación', () => {
     await inicializarApp()
     const controlador = new UsuarioController()
 
-    const resultado = await controlador.registrarUsuario('encargado', 'clave123', 'indicio', false)
+    const resultado = await controlador.registrarUsuario(
+      'encargado',
+      'clave123',
+      'indicio',
+      false,
+      async () => false,
+    )
     expect(resultado.exito).toBe(true)
 
     const usuarios = await controlador.obtenerUsuarios()
@@ -38,7 +44,7 @@ describe('Arranque de la aplicación', () => {
   it('si ya hay un administrador, un registro sin permiso queda como REGISTRADO', async () => {
     await inicializarApp()
     const controlador = new UsuarioController()
-    await controlador.registrarUsuario('admin', 'clave123', 'indicio', false)
+    await controlador.registrarUsuario('admin', 'clave123', 'indicio', false, async () => false)
     await controlador.registrarUsuario('cajero', 'clave123', 'indicio', false)
 
     const cajero = await controlador.iniciarSesion('cajero', 'clave123')
@@ -48,11 +54,47 @@ describe('Arranque de la aplicación', () => {
   it('mantiene la promoción: no permite crear un segundo admin sin aprobación', async () => {
     await inicializarApp()
     const controlador = new UsuarioController()
-    await controlador.registrarUsuario('admin', 'clave123', 'indicio', false)
+    await controlador.registrarUsuario('admin', 'clave123', 'indicio', false, async () => false)
     await controlador.registrarUsuario('aspirante', 'clave123', 'indicio', true)
 
     const aspirante = await controlador.iniciarSesion('aspirante', 'clave123')
     expect(aspirante?.tipo_usuario).toBe(TIPO_REGISTRADO)
+    expect(await db.solicitudes_admin.count()).toBe(1)
+  })
+
+  it('no promueve cuando la nube ya tiene un administrador (AL-05)', async () => {
+    await inicializarApp()
+    const controlador = new UsuarioController()
+
+    const resultado = await controlador.registrarUsuario(
+      'nuevo',
+      'clave123',
+      'indicio',
+      false,
+      async () => true,
+    )
+    expect(resultado.exito).toBe(true)
+
+    const usuarios = await controlador.obtenerUsuarios()
+    expect(usuarios).toHaveLength(1)
+    expect(usuarios[0].tipo_usuario).toBe(TIPO_REGISTRADO)
+  })
+
+  it('sin confirmación de la nube no otorga administrador automático (AL-05)', async () => {
+    await inicializarApp()
+    const controlador = new UsuarioController()
+
+    const resultado = await controlador.registrarUsuario(
+      'nuevo',
+      'clave123',
+      'indicio',
+      true,
+      async () => null,
+    )
+    expect(resultado.exito).toBe(true)
+
+    const usuarios = await controlador.obtenerUsuarios()
+    expect(usuarios[0].tipo_usuario).toBe(TIPO_REGISTRADO)
     expect(await db.solicitudes_admin.count()).toBe(1)
   })
 
