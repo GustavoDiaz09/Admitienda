@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../lib/db'
-import { aplicarRemotos } from '../sync/pull'
+import { aplicarRemotos, guardarCursorDescarga, obtenerCursorDescarga } from '../sync/pull'
 import { idOutbox } from '../sync/outbox'
 import type { Producto, RegistroBase } from '../model/types'
 
@@ -140,5 +140,24 @@ describe('Fusión nube-local con última escritura gana (LWW)', () => {
     await aplicarRemotos('productos', [])
 
     expect(await db.outbox.get(idOutbox('productos', 'x1'))).toBeDefined()
+  })
+})
+
+describe('Cursor de descarga incremental', () => {
+  it('empieza en cero y guarda la última marca', async () => {
+    expect(await obtenerCursorDescarga()).toBe(0)
+
+    await guardarCursorDescarga(1789000000000)
+
+    expect(await obtenerCursorDescarga()).toBe(1789000000000)
+  })
+
+  it('resetea el cursor a cero cuando se elimina la base', async () => {
+    await guardarCursorDescarga(1789000000000)
+
+    await db.delete()
+    await db.open()
+
+    expect(await obtenerCursorDescarga()).toBe(0)
   })
 })

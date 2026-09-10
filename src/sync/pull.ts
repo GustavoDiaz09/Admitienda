@@ -22,6 +22,23 @@ interface ResultadoPull {
   dispositivos: Set<string>
 }
 
+/** Clave del metadato que guarda la marca desde la que se bajó la nube. */
+const CLAVE_CURSOR = 'ultima_descarga'
+
+/**
+ * Marca de tiempo (epoch ms) de la última descarga exitosa. Se usa como
+ * cursor incremental: solo se vuelve a bajar lo modificado después de él.
+ */
+export async function obtenerCursorDescarga(): Promise<number> {
+  const fila = await db.metadatos.get(CLAVE_CURSOR)
+  return fila ? Number(fila.valor) || 0 : 0
+}
+
+/** Persiste el cursor de descarga tras una bajada exitosa. */
+export async function guardarCursorDescarga(marcaTiempo: number): Promise<void> {
+  await db.metadatos.put({ clave: CLAVE_CURSOR, valor: String(marcaTiempo) })
+}
+
 /** Convierte una fila de la nube (nombres con guion bajo) a registro local. */
 function filaLocal(fila: Record<string, unknown>): RegistroBase {
   const base = {
@@ -111,8 +128,14 @@ export async function aplicarRemotos(
  * este dispositivo. No descarta datos locales: lo que esté más reciente
  * (nube o dispositivo) se conserva, y los cambios locales pendientes que
  * sigan ganando se re-intentan al terminar.
+ *
+ * Por defecto es **incremental**: solo trae lo modificado después del
+ * último cursor guardado. Con `{ completo: true }` se baja la base completa
+ * (acción manual "Descargar todo" de un administrador).
  */
-export async function traerDatosDelServidor(): Promise<ResultadoPull> {
+export async function traerDatosDelServidor(
+  opciones: { completo?: boolean } = {},
+): Promise<ResultadoPull> {
   const resultado: ResultadoPull = {
     recibidos: 0,
     actualizados: 0,
@@ -126,7 +149,10 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
   const store = useSyncStore.getState()
   store.setError(null)
 
-  const tablas = await descargarRemoto()
+  const cursor = await obtenerCursorDescarga()
+  const desde = opciones.completo || cursor === 0 ? undefined : cursor
+  const inicioDeDescarga = Date.now()
+  const tablas = await descargarRemoto(desde)
   for (const tabla of TABLAS) {
     const remotos = (tablas[tabla] ?? []) as Array<Record<string, unknown>>
     const aplicados = await aplicarRemotos(tabla, remotos)
@@ -138,6 +164,10 @@ export async function traerDatosDelServidor(): Promise<ResultadoPull> {
     }
     resultado.tablas++
   }
+  // El cursor avanza a la marca de inicio de esta descarga, no a la de fin:
+  // cualquier fila tocada durante la bajada queda > cursor y se repetirá en
+  // el siguiente ciclo (la fusión LWW es idempotente).
+  await guardarCursorDescarga(inicioDeDescarga)
   await refrescarPendientes()
   const pendientes = await contarPendientes()
   if (pendientes > 0) {

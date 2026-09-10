@@ -32,7 +32,9 @@ export async function ejecutarAccionDeSync(accion: TipoAccionSync): Promise<void
       window.dispatchEvent(new Event(EVENTO_DATOS))
       return
     }
-    const resultado = await traerDatosDelServidor()
+    // Descarga manual del administrador: baja la base completa de la nube
+    // (a diferencia de la bajada automática, que es incremental).
+    const resultado = await traerDatosDelServidor({ completo: true })
     await refrescarPendientes()
     let mensaje = `Dispositivo sincronizado con la nube: ${resultado.recibidos} registro(s) revisados, ${resultado.actualizados} actualizados.`
     if (resultado.conflictos > 0) {

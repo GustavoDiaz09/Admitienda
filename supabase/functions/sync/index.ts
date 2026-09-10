@@ -103,15 +103,23 @@ Deno.serve(async (req) => {
     }
 
     if (accion === 'descargar') {
+      // Filtro incremental: si viene `desde` (epoch ms), se devuelven solo
+      // las filas modificadas después de esa marca (actualizado_en > desde).
+      // Sin `desde` se devuelve la tabla completa (restauración).
+      const desdeTexto = new URL(req.url).searchParams.get('desde')
+      const desde = Number(desdeTexto)
+      const usarDesde = Number.isFinite(desde) && desde > 0
       const tablas: Record<string, unknown[]> = {}
       for (const tabla of TABLAS) {
         const filas: unknown[] = []
         const TAMANO_LOTE = 1000
         let inicio = 0
         for (;;) {
-          const { data, error } = await supabase
-            .from(tabla)
-            .select('*')
+          let consulta = supabase.from(tabla).select('*')
+          if (usarDesde) {
+            consulta = consulta.gt('actualizado_en', desde)
+          }
+          const { data, error } = await consulta
             .order('id', { ascending: true })
             .range(inicio, inicio + TAMANO_LOTE - 1)
           if (error) {

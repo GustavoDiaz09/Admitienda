@@ -12,7 +12,11 @@ import type { TablaSync } from '../model/types'
 /** Resultado de una descarga completa: filas por tabla. */
 export type DescargaRemota = Record<string, Array<Record<string, unknown>>>
 
-async function llamar(accion: string, cuerpo?: unknown): Promise<unknown> {
+async function llamar(
+  accion: string,
+  cuerpo?: unknown,
+  query?: Record<string, string | number>,
+): Promise<unknown> {
   if (!supabaseDisponible()) {
     throw new Error('Supabase no está configurado. Revise las variables de entorno.')
   }
@@ -22,19 +26,23 @@ async function llamar(accion: string, cuerpo?: unknown): Promise<unknown> {
       'Falta la llave de sincronización de este dispositivo. Configúrela en el panel de sincronización.',
     )
   }
+  const url = new URL(`${supabaseUrl}/functions/v1/sync`)
+  url.searchParams.set('accion', accion)
+  if (query) {
+    for (const [clave, valor] of Object.entries(query)) {
+      url.searchParams.set(clave, String(valor))
+    }
+  }
   let respuesta: Response
   try {
-    respuesta = await fetch(
-      `${supabaseUrl}/functions/v1/sync?accion=${encodeURIComponent(accion)}`,
-      {
-        method: cuerpo === undefined ? 'GET' : 'POST',
-        headers: {
-          'x-llave-sincronizacion': llave,
-          ...(cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        },
-        body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    respuesta = await fetch(url.toString(), {
+      method: cuerpo === undefined ? 'GET' : 'POST',
+      headers: {
+        'x-llave-sincronizacion': llave,
+        ...(cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
-    )
+      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    })
   } catch {
     throw new Error('No se pudo conectar con la nube.')
   }
@@ -67,9 +75,13 @@ export async function verificarRemoto(): Promise<boolean> {
   }
 }
 
-/** Descarga TODAS las filas de las 6 tablas (para "Descargar todo"). */
-export async function descargarRemoto(): Promise<DescargaRemota> {
-  const datos = await llamar('descargar')
+/**
+ * Descarga las filas de las 6 tablas. Si se pasa `desde` (epoch ms), solo
+ * las modificadas después de esa marca (descarga incremental); sin `desde`
+ * se descarga la base completa (restauración).
+ */
+export async function descargarRemoto(desde?: number): Promise<DescargaRemota> {
+  const datos = await llamar('descargar', undefined, desde ? { desde } : undefined)
   if (datos == null || typeof datos !== 'object') {
     throw new Error('La nube devolvió una respuesta inesperada al descargar.')
   }

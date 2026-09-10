@@ -109,6 +109,11 @@ módulo de Resúmenes:
 - **Bajar todo (solo administrador):** fusiona la nube con este dispositivo.
   En cada dato gana la versión más reciente y no se pierden los cambios
   locales pendientes; úsalo cuando configures un dispositivo nuevo.
+- **Bajada automática:** con la llave configurada y conexión, la aplicación
+  además **baja por su cuenta los cambios nuevos** de la nube (una vez al
+  arrancar, al volver a conectarse y aproximadamente cada 30 s). Así, cuando
+  se modifica algo en otro dispositivo, en este se refleja solo, sin tocar
+  nada; la fusión sigue siendo la misma (gana la versión más reciente).
 
 > Regla de conflictos: si un dato fue modificado en dos lugares, gana la
 > versión más reciente. Los importes se escriben en formato colombiano (punto

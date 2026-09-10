@@ -93,22 +93,33 @@ Reglas de negocio de integridad:
 
 ## 5. Sincronización (Supabase)
 
-- **Unidireccional por defecto:** los cambios locales suben solos; el pull
-  total es manual y exclusivo del ADMIN.
 - **Outbox:** clave `${tabla}:${registroId}`; `MAX_INTENTOS = 5`. El motor
   (`src/sync/syncEngine.ts`) reacciona a `online`/`offline` y corre en intervalo
   de 15 s: `sincronizarAhora()` sube los pendientes y actualiza el store Zustand
-  (`enLinea`, `pendientes`, `sincronizando`, `ultimaSync`, `error`).
-- **Pull administrado con LWW:** `traerDatosDelServidor()` descarga las 6
-  tablas y las fusiona en la base local mediante `aplicarRemotos()`
-  (`src/sync/pull.ts`): en cada registro gana la versión más reciente
-  (`actualizadoEn`, en empate `version`). Si gana la nube, la copia local se
-  reemplaza **y se cancela** la edición local pendiente de ese registro en la
-  outbox; si gana el dispositivo, su copia y su entrada de cola se conservan y
-  se re-intentan al final. No se descartan datos locales. Los choques con la
-  restricción local de unicidad se omiten y se cuentan como `conflictos`.
-  `respaldarTodoEnServidor()` sube la base completa (primer poblamiento de una
-  tienda).
+  (`enLinea`, `pendientes`, `sincronizando`, `bajando`, `ultimaSync`, `error`).
+- **Bidireccional automático:** además del push del outbox, el motor baja cambios
+  de la nube con `sincronizarBajando()` en el arranque, al volver a línea y como
+  máximo cada 30 s (constante `INTERVALO_PULL_AUTO_MS`, módulo `ultimoPullAuto`).
+  Solo opera si hay llave configurada (`hayLlaveConfigurada()`), hay conexión y
+  no hay ya un push (`sincronizando`) ni un pull (`bajando`) en curso, para no
+  solaparse. Los errores de segundo plano solo marcan `enLinea = false`.
+- **Pull incremental con cursor:** `traerDatosDelServidor({ completo? })`
+  (`src/sync/pull.ts`) baja solo lo modificado después del cursor
+  (`metadatos.ultima_descarga`, helpers `obtenerCursorDescarga()` /
+  `guardarCursorDescarga()`); sin cursor previo (o con `{ completo: true }`,
+  que usa la acción manual "Descargar todo" del ADMIN) baja la base completa.
+  El cursor se avanza a `Date.now()` **al inicio** de cada descarga, no al final:
+  cualquier fila tocada durante la bajada queda `> cursor` y se repite en el
+  siguiente ciclo (la fusión LWW es idempotente). El cursor vive en `metadatos`,
+  así que se borra junto con la base (nueva restauración).
+- **Fusión LWW:** `aplicarRemotos()` fusiona las filas bajadas en la base local:
+  en cada registro gana la versión más reciente (`actualizadoEn`, en empate
+  `version`). Si gana la nube, la copia local se reemplaza **y se cancela** la
+  edición local pendiente de ese registro en la outbox; si gana el dispositivo,
+  su copia y su entrada de cola se conservan y se re-intentan al final. No se
+  descartan datos locales. Los choques con la restricción local de unicidad se
+  omiten y se cuentan como `conflictos`. `respaldarTodoEnServidor()` sube la
+  base completa (primer poblamiento de una tienda).
 - **Mapeo de nombres:** en Dexie los campos base son camelCase y los de negocio
   con guion bajo (`nombre_producto`) igual que las columnas de Supabase. En
   `pull.ts`, `filaExtra()` convierte los campos base al subir y `filaLocal()`
@@ -120,7 +131,8 @@ Reglas de negocio de integridad:
   `llaves_sincronizacion` (PBKDF2-HMAC-SHA-256, 210.000 iteraciones) y recién
   entonces lee/escribe con service_role. La llave de cada dispositivo vive solo
   en su `localStorage` (`src/lib/llave.ts`); se configura una vez en el panel
-  de sincronización.
+  de sincronización. `llamar()` admite además query params
+  (`descargarRemoto(desde?)` pasa `desde` únicamente si `> 0`).
 - **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo
   (PK `id uuid`, blanco del `onConflict`) y `llaves_sincronizacion`. El acceso
   de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
@@ -133,10 +145,13 @@ Reglas de negocio de integridad:
   durante la subida, la versión nueva queda pendiente y no se pierde). Las
   entradas que agotan `MAX_INTENTOS=5` se dejan en espera y se retoman tras
   `TIEMPO_REINTENTO_MS` (60 s).
-- **Descarga paginada:** la acción `descargar` de la Edge Function itera con
-  `.order('id').range(...)` en lotes de 1000 para no truncar tablas grandes.
-  El botón "Descargar todo" (panel de sync y Resúmenes) pide confirmación y
-  fusiona la nube con el dispositivo sin descartar datos locales.
+- **Descarga paginada e incremental en la nube:** la acción `descargar` de la
+  Edge Function itera con `.order('id').range(...)` en lotes de 1000 para no
+  truncar tablas grandes; si viene el query param `desde` (epoch ms finito y
+  `> 0`) aplica `.gt('actualizado_en', desde)` para devolver solo lo cambiado
+  desde el cursor del dispositivo. Sin `desde` devuelve la tabla completa
+  (restauración). El botón "Descargar todo" (panel de sync y Resúmenes) pide
+  confirmación y fusiona la nube con el dispositivo sin descartar datos locales.
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
   vistas recarguen.
 
@@ -199,7 +214,8 @@ Reglas de negocio de integridad:
   `src/test/validaciones.test.ts` y `fechas.test.ts` cubren `normalizarMonto` y
   el round-trip UTC de Colombia; `resumen.test.ts` valida la semana en hora de
   Colombia; `pull.test.ts` cubre la fusión LWW (nube más reciente, local más
-  reciente, empate y tumbas) contra la outbox.
+  reciente, empate y tumbas) contra la outbox y el cursor de descarga
+  incremental (`obtenerCursorDescarga`/`guardarCursorDescarga`).
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 

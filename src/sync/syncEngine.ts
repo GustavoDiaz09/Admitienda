@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabaseDisponible } from '../lib/supabase'
 import { hayLlaveConfigurada } from '../lib/llave'
 import { subirRemoto, verificarRemoto } from '../lib/remoto'
+import { traerDatosDelServidor } from './pull'
 import { contarPendientes, eliminarItemSiSigueIgual, listarPendientes, marcarIntento, reiniciarIntento } from './outbox'
 import type { RegistroBase, TablaSync } from '../model/types'
 
@@ -11,16 +12,24 @@ const MAX_INTENTOS = 5
 /** Tiempo de espera (ms) antes de volver a intentar una entrada agotada. */
 const TIEMPO_REINTENTO_MS = 60_000
 
+/** Separación mínima (ms) entre bajadas automáticas de la nube. */
+const INTERVALO_PULL_AUTO_MS = 30_000
+
+/** Última bajada automática (en memoria; el cursor real vive en metadatos). */
+let ultimoPullAuto = 0
+
 /** Estado global de la sincronización (visible en la interfaz). */
 interface SyncState {
   enLinea: boolean
   pendientes: number
   sincronizando: boolean
+  bajando: boolean
   ultimaSync: number | null
   error: string | null
   setEnLinea: (v: boolean) => void
   setPendientes: (v: number) => void
   setSincronizando: (v: boolean) => void
+  setBajando: (v: boolean) => void
   setUltimaSync: (v: number | null) => void
   setError: (v: string | null) => void
 }
@@ -29,11 +38,13 @@ export const useSyncStore = create<SyncState>((set) => ({
   enLinea: navigator.onLine,
   pendientes: 0,
   sincronizando: false,
+  bajando: false,
   ultimaSync: null,
   error: null,
   setEnLinea: (enLinea) => set({ enLinea }),
   setPendientes: (pendientes) => set({ pendientes }),
   setSincronizando: (sincronizando) => set({ sincronizando }),
+  setBajando: (bajando) => set({ bajando }),
   setUltimaSync: (ultimaSync) => set({ ultimaSync }),
   setError: (error) => set({ error }),
 }))
@@ -52,9 +63,36 @@ export async function verificarConectividad(): Promise<boolean> {
 }
 
 /**
+ * Baja cambios de la nube de forma incremental y los fusiona (LWW), en
+ * segundo plano. Silencioso: nunca lanza errores — solo marca el estado.
+ * Lo usan el sondeo periódico y el arranque / vuelta a línea.
+ */
+export async function sincronizarBajando(): Promise<void> {
+  const store = useSyncStore.getState()
+  if (
+    !supabaseDisponible() ||
+    !hayLlaveConfigurada() ||
+    !navigator.onLine ||
+    store.bajando ||
+    store.sincronizando
+  ) {
+    return
+  }
+  store.setBajando(true)
+  try {
+    await traerDatosDelServidor()
+  } catch {
+    // En segundo plano no se interrumpe nada; el siguiente ciclo reintenta.
+    store.setEnLinea(false)
+  } finally {
+    store.setBajando(false)
+  }
+}
+
+/**
  * Sube los cambios pendientes (outbox) a la nube a través de la Edge
- * Function `sync`. El sentido es unidireccional: la app nunca baja datos
- * aquí; el pull es explícito y solo lo dispara un administrador.
+ * Function `sync`. Este lado es unidireccional (solo sube); la bajada
+ * automática la hace `sincronizarBajando()` con la misma cadencia del motor.
  */
 export async function sincronizarAhora(): Promise<{ subidos: number; fallados: number }> {
   const store = useSyncStore.getState()
@@ -176,6 +214,7 @@ export function iniciarMotorDeSync(intervaloMs = 15000): void {
   window.addEventListener('online', () => {
     useSyncStore.getState().setEnLinea(true)
     void sincronizarAhora()
+    void sincronizarBajando()
     void refrescarPendientes()
   })
   window.addEventListener('offline', () => {
@@ -185,13 +224,20 @@ export function iniciarMotorDeSync(intervaloMs = 15000): void {
     void (async () => {
       const pendientes = await contarPendientes()
       useSyncStore.getState().setPendientes(pendientes)
-      if (pendientes > 0 && navigator.onLine && hayLlaveConfigurada()) {
-        void sincronizarAhora()
+      if (navigator.onLine && hayLlaveConfigurada()) {
+        if (pendientes > 0) {
+          void sincronizarAhora()
+        }
+        if (Date.now() - ultimoPullAuto >= INTERVALO_PULL_AUTO_MS) {
+          ultimoPullAuto = Date.now()
+          void sincronizarBajando()
+        }
       }
     })()
   }, intervaloMs)
 
   if (navigator.onLine && hayLlaveConfigurada()) {
     void sincronizarAhora()
+    void sincronizarBajando()
   }
 }
