@@ -69,10 +69,14 @@ export function Registro() {
             required
           />
         </Campo>
-        <Campo etiqueta="Indicio de seguridad" htmlFor="reg-indicio">
+        <Campo
+          etiqueta="Palabras clave de seguridad"
+          htmlFor="reg-indicio"
+          ayuda="Escriba una o varias palabras que solo usted conozca y que le ayuden a recordar su contraseña si alguna vez la olvida. Elíjalas de modo que no sean fáciles de adivinar: evite su nombre, fechas de nacimiento u otros datos personales obvios, así su cuenta estará mejor protegida."
+        >
           <Entrada
             id="reg-indicio"
-            placeholder="Respuesta que lo ayuda a recuperar su cuenta"
+            placeholder="Palabras que solo usted conozca, p. ej. su comida y lugar favoritos"
             value={indicio}
             onChange={(e) => setIndicio(e.target.value)}
             required

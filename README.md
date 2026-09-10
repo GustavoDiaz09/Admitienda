@@ -44,7 +44,7 @@ npm.cmd test           :: pruebas Vitest (fake-indexeddb)
 
 | Usuario | Contraseña | Rol            |
 |---------|------------|----------------|
-| `admin` | `admin123` | Administrador |
+| `admin` | `Gustavo1234` | Administrador |
 
 > Cambia el indicio de seguridad del admin inicial desde *Gestión de Usuarios*.
 > Si te registras antes de que exista un administrador, asumes ese rol.
@@ -52,9 +52,11 @@ npm.cmd test           :: pruebas Vitest (fake-indexeddb)
 ## Roles
 
 - **Invitado:** puede ver la tabla de productos (solo lectura), sin iniciar sesión.
-- **Registrado:** ve productos y puede solicitar el permiso de administrador.
+- **Registrado:** ve en solo lectura **Resúmenes**, **Productos** y **Deudas y
+  pagos** (no puede crear, editar ni eliminar); puede solicitar el permiso de
+  administrador.
 - **Administrador:** acceso completo (productos, movimientos, resúmenes,
-  gestión de usuarios y alertas de inventario).
+  gestión de usuarios, deudas y alertas de inventario).
 
 ## Estructura del proyecto
 

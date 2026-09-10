@@ -11,23 +11,30 @@ o la computadora.
 2. Inicia sesión con las credenciales que te entregue el administrador.
    Por defecto existe la cuenta:
    - Usuario: `admin`
-   - Contraseña: `admin123`
+   - Contraseña: `Gustavo1234`
 3. Al terminar, cierra la sesión con el botón de la barra superior (esquina
    superior derecha).
 
 ### 1.1 Registrarse
 
 1. En la pantalla de ingreso pulsa **Crear cuenta**.
-2. Escribe el nombre de usuario, una contraseña (mínimo 8 caracteres) y un
-   **indicio de seguridad** (una palabra que solo tú conozcas, para recuperar
-   la contraseña).
+2. Escribe el nombre de usuario, una contraseña (mínimo 6 caracteres) y unas
+   **palabras clave de seguridad** que solo tú conozcas y que te ayuden a
+   recordar la contraseña si la olvidas. Elígelas de modo que no sean fáciles de
+   adivinar (evita tu nombre, fechas de nacimiento u otros datos obvios) para
+   mantener tu cuenta protegida.
 3. Opcionalmente marca *Solicitar permiso de administrador*. Si ya existe un
    administrador, tu petición queda pendiente de aprobación.
+
+Los usuarios **registrados** pueden consultar (solo lectura) **Resúmenes**,
+**Productos** y **Deudas y pagos**; solo los administradores pueden crear,
+editar o eliminar esos registros.
 
 ### 1.2 Recuperar la contraseña
 
 En la pantalla de ingreso pulsa **¿Olvidaste tu contraseña?**: escribe tu
-usuario, confirma el indicio de seguridad y define una contraseña nueva.
+usuario, confirma las palabras clave de seguridad que registraste y define una
+contraseña nueva.
 
 ## 2. Roles
 

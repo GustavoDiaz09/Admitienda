@@ -94,7 +94,7 @@ export function RecuperarContrasena() {
           paso === 1
             ? 'Escriba el nombre de usuario para comenzar.'
             : paso === 2
-              ? 'Responda la pregunta de seguridad para su cuenta.'
+              ? 'Escriba las palabras clave de seguridad que registró al crear la cuenta.'
               : 'Escriba la nueva contraseña para su cuenta.'
         }
       />
@@ -120,11 +120,11 @@ export function RecuperarContrasena() {
         </form>
       ) : paso === 2 ? (
         <form onSubmit={verificarIndicio} className="space-y-4">
-          <Campo etiqueta="Indicio de seguridad" htmlFor="rec-indicio">
+          <Campo etiqueta="Palabras clave de seguridad" htmlFor="rec-indicio">
             <Entrada
               id="rec-indicio"
               icono={Key}
-              placeholder="La respuesta que registró"
+              placeholder="Las palabras clave que registró"
               value={indicio}
               onChange={(e) => setIndicio(e.target.value)}
               autoFocus

@@ -12,7 +12,7 @@ import { TIPO_INGRESO_TEXTO, TIPO_EGRESO_TEXTO } from './constantes'
 
 /** Credenciales del administrador inicial (iguales a la app de escritorio). */
 export const ADMIN_INICIAL_USUARIO = 'admin'
-export const ADMIN_INICIAL_CONTRASENA = 'admin123'
+export const ADMIN_INICIAL_CONTRASENA = 'Gustavo1234'
 export const ADMIN_INICIAL_INDICIO = 'Tienda'
 
 /**

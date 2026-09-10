@@ -4,7 +4,7 @@ import { inicializarApp } from '../lib/inicializacion'
 import { UsuarioController } from '../controller/UsuarioController'
 import { ProductoController } from '../controller/ProductoController'
 import { MovimientoController } from '../controller/MovimientoController'
-import { DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
+import { ADMIN_INICIAL_CONTRASENA, DISPOSITIVO_SEMILLA } from '../seed/DatosEjemplo'
 import { TIPO_ADMIN, TIPO_INGRESO } from '../model/types'
 
 beforeEach(async () => {
@@ -39,7 +39,7 @@ describe('Arranque de la aplicación', () => {
   it('permite iniciar sesión con las credenciales por defecto', async () => {
     await inicializarApp()
 
-    const usuario = await new UsuarioController().iniciarSesion('admin', 'admin123')
+    const usuario = await new UsuarioController().iniciarSesion('admin', ADMIN_INICIAL_CONTRASENA)
     expect(usuario).not.toBeNull()
     expect(usuario?.tipo_usuario).toBe(TIPO_ADMIN)
     expect(await new UsuarioController().iniciarSesion('admin', 'clave-incorrecta')).toBeNull()

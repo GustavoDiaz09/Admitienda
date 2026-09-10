@@ -315,7 +315,11 @@ function FormularioUsuario({
             autoFocus
           />
         </Campo>
-        <Campo etiqueta="Indicio de seguridad" htmlFor="usr-indicio">
+        <Campo
+          etiqueta="Palabras clave de seguridad"
+          htmlFor="usr-indicio"
+          ayuda="Palabras que solo usted conozca y que le ayuden a recordar su contraseña si la olvida. Evite datos obvios (nombres, fechas de nacimiento), así su cuenta estará mejor protegida."
+        >
           <Entrada
             id="usr-indicio"
             value={indicio}

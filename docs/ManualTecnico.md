@@ -47,9 +47,10 @@ src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
   `src/lib/mutaciones.ts` (persistir + `encolar` a la outbox), con
   `actualizadoEn` renovado y `version` incrementado.
 - `inicializarApp()` (en `App.tsx` en el arranque) abre la BD y siembra solo si
-  está vacía: admin `admin`/`admin123` (indicio `Tienda`) y 35 productos de
+  está vacía: admin `admin`/`Gustavo1234` (indicio `Tienda`) y 35 productos de
   ejemplo (3 con stock bajo) más los movimientos ya transcurridos de la semana
-  en curso.
+  en curso. Los datos sembrados se marcan con `dispositivo: 'semilla-local'`
+  (`DISPOSITIVO_SEMILLA`) y **no** se encolan ni se suben a la nube.
 
 ## 4. Modelo de datos
 
@@ -94,17 +95,28 @@ y `metadatos`).
   (`src/lib/password.ts`); formato idéntico al `PasswordUtils` de Java, así un
   hash migrado de la BD del escritorio funciona igual.
 - Sesión en store Zustand + sessionStorage (`sistematienda.sesion`), restaurada
-  con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`
-  protegen las rutas; invitado navega sin sesión a productos.
-- Roles: `TIPO_ADMIN`, `TIPO_REGISTRADO`, `INVITADO`. Solicitudes de permiso en
-  `solicitudes_admin` (pendiente/aprobada/rechazada).
+  con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`/
+  `SoloConCuenta` protegen las rutas; invitado navega sin sesión a productos.
+- Roles: `TIPO_ADMIN` (edita todo), `TIPO_REGISTRADO` (solo lectura en
+  resumen/productos/deudas) e `INVITADO` (solo consulta productos). Guardas en
+  `src/App.tsx`: `SoloAdministrador` en movimientos/usuarios/alertas;
+  `SoloConCuenta` en resumenes/deudas; los botones de modificación se ocultan
+  según `esAdmin` en las vistas. Solicitudes de permiso en `solicitudes_admin`
+  (pendiente/aprobada/rechazada).
+- Campo de seguridad: cada usuario registra **palabras clave** (`indicio_usuario`)
+  que se usan en el flujo de recuperación (`RecuperarContrasena`). En el
+  registro y edición de usuario se muestra la advertencia de que deben ser
+  personales y no evidentes.
 
 ## 7. Routing, layout y diseño
 
 - Rutas en `src/App.tsx`: públicas `/ingreso`, `/registro`, `/recuperar`;
-  protegidas `productos`, `movimientos`, `resumenes`, `usuarios`, `alertas`,
-  con index que redirige por rol. Views cargadas con `React.lazy` + `Suspense`
-  (code-splitting por ruta).
+  protegidas con `SoloAdministrador` (movimientos, usuarios, alertas y resumen
+  solo para admin en versiones previas) o `SoloConCuenta` (resumenes y deudas,
+  visibles en lectura para cualquier usuario con cuenta); `productos` abierta a
+  todos (lectura sin sesión). Index redirige por rol, con invitados a
+  `productos`. Views cargadas con `React.lazy` + `Suspense` (code-splitting por
+  ruta).
 - `AppShell`: sidebar oscuro (`zinc-950`), drawer móvil, header con
   `SyncIndicator`, chip de usuario, acción *Solicitar permiso* (REGISTRADO) y
   cerrar sesión.
@@ -118,7 +130,7 @@ y `metadatos`).
 - `npm.cmd run lint` (oxlint), `npx.cmd tsc -b`, `npm.cmd test` (Vitest +
   fake-indexeddb), `npm.cmd run build`.
 - Smoke tests en `src/test/inicializacion.test.ts`: arranque+seed, login
-  `admin`/`admin123`, alta de ingreso con efecto en resúmenes, rechazo de datos
+  `admin`/`Gustavo1234`, alta de ingreso con efecto en resúmenes, rechazo de datos
   inválidos. Aserciones **relativas** porque el seed sembra datos.
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
