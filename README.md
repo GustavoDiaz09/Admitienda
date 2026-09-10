@@ -64,7 +64,7 @@ sistematienda-web/
 │   ├── model/           Tipos de dominio (Usuario, Producto, Movimiento…)
 │   ├── dao/             Persistencia Dexie/IndexedDB por entidad
 │   ├── controller/      Lógica de negocio (port de los controladores Java)
-│   ├── lib/             db, bootstrap, contraseñas, supabase, utilidades
+│   ├── lib/             db, bootstrap, contraseñas (PBKDF2), supabase, utilidades
 │   ├── sync/            Outbox, motor de sincronización, pull/respaldo
 │   ├── components/      ui/ (Button, Campo, Tabla…), layout/, auth/
 │   ├── views/           Páginas (Login, Productos, Resumenes, Alertas…)

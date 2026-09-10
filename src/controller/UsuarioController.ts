@@ -5,6 +5,7 @@ import { SolicitudAdminDao } from '../dao/SolicitudAdminDao'
 import { Resultado } from './Resultado'
 import {
   contrasenaValida,
+  esHashMigrable,
   generarSalt,
   hashContrasena,
   verificarContrasena,
@@ -35,7 +36,18 @@ export class UsuarioController {
       return null
     }
     const valida = await verificarContrasena(contrasena, usuario.salt, usuario.contrasena_hash)
-    return valida ? usuario : null
+    if (!valida) {
+      return null
+    }
+    if (esHashMigrable(usuario.contrasena_hash)) {
+      const nuevoSalt = generarSalt()
+      await this.usuarioDao.actualizar({
+        ...usuario,
+        salt: nuevoSalt,
+        contrasena_hash: await hashContrasena(contrasena, nuevoSalt),
+      })
+    }
+    return usuario
   }
 
   /**

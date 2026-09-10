@@ -90,9 +90,11 @@ y `metadatos`).
 
 ## 6. Autenticación
 
-- **100 % local**: `hash = hex(SHA-256(contraseña + salt))` con Web Crypto
-  (`src/lib/password.ts`); formato idéntico al `PasswordUtils` de Java, así un
-  hash migrado de la BD del escritorio funciona igual.
+- **100 % local**: `hash = pbkdf2$<iteraciones>$hex(<PBKDF2-HMAC-SHA-256>)` de
+  `contraseña + salt` con Web Crypto (`src/lib/password.ts`, 210.000
+  iteraciones). Los hashes legacy SHA-256 (formato Java) se siguen verificando
+  y se **re-hashan con PBKDF2 la primera vez que el usuario inicia sesión**
+  (migración progresiva).
 - Sesión en store Zustand + sessionStorage (`sistematienda.sesion`), restaurada
   con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`/
   `SoloConCuenta` protegen las rutas; invitado navega sin sesión a productos.
