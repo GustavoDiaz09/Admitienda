@@ -145,9 +145,9 @@ export default function App() {
               <Route
                 path="movimientos"
                 element={
-                  <SoloAdministrador>
+                  <SoloConCuenta>
                     <Movimientos />
-                  </SoloAdministrador>
+                  </SoloConCuenta>
                 }
               />
               <Route

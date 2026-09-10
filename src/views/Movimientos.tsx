@@ -10,9 +10,11 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { MovimientoController } from '../controller/MovimientoController'
+import { useSesionStore } from '../controller/SessionController'
 import {
   TIPO_INGRESO,
   TIPO_EGRESO,
+  TIPO_ADMIN,
   type Movimiento,
 } from '../model/types'
 import { moneda } from '../lib/formato'
@@ -29,8 +31,9 @@ import { cn } from '../lib/cn'
 
 type FiltroMovimiento = 'TODOS' | 'INGRESO' | 'EGRESO'
 
-/** Historial de ingresos y egresos (solo administrador). */
+/** Historial de ingresos y egresos (lectura para REGISTRADO; edición solo ADMIN). */
 export function Movimientos() {
+  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
   const [movimientos, setMovimientos] = useState<Movimiento[] | null>(null)
   const [totales, setTotales] = useState<{ ingresos: number; egresos: number } | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -73,9 +76,11 @@ export function Movimientos() {
         titulo="Ingresos y egresos"
         descripcion="Historial financiero de la tienda con totales automáticos."
         acciones={
-          <Button icono={Plus} onClick={() => setEdicion('nuevo')}>
-            Nuevo movimiento
-          </Button>
+          esAdmin ? (
+            <Button icono={Plus} onClick={() => setEdicion('nuevo')}>
+              Nuevo movimiento
+            </Button>
+          ) : undefined
         }
       />
 
@@ -127,17 +132,21 @@ export function Movimientos() {
             titulo={movimientos.length === 0 ? 'Sin movimientos registrados' : 'Sin resultados'}
             descripcion={
               movimientos.length === 0
-                ? 'Registre su primer ingreso o egreso con el botón "Nuevo movimiento".'
+                ? esAdmin
+                  ? 'Registre su primer ingreso o egreso con el botón "Nuevo movimiento".'
+                  : 'Aún no se han registrado ingresos o egresos en la tienda.'
                 : 'No hay movimientos que coincidan con la búsqueda.'
             }
             accion={
-              <Button icono={Plus} onClick={() => setEdicion('nuevo')}>
-                Nuevo movimiento
-              </Button>
+              esAdmin ? (
+                <Button icono={Plus} onClick={() => setEdicion('nuevo')}>
+                  Nuevo movimiento
+                </Button>
+              ) : undefined
             }
           />
         ) : (
-          <Tabla encabezados={['Tipo', 'Monto', 'Descripción', 'Fecha', '']}>
+          <Tabla encabezados={['Tipo', 'Monto', 'Descripción', 'Fecha', ...(esAdmin ? [''] : [])]}>
             {filtrados.map((m) => {
               const esIngreso = m.tipo_movimiento === TIPO_INGRESO
               return (
@@ -162,32 +171,34 @@ export function Movimientos() {
                   </CeldaNumerica>
                   <Celda className="max-w-md truncate">{m.descripcion}</Celda>
                   <Celda className="text-zinc-500">{formatearFecha(m.fecha)}</Celda>
-                  <Celda className="text-right">
-                    <div className="inline-flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setEdicion(m)}
-                        aria-label="Modificar movimiento"
-                        className="focus-ring rounded-full p-2 text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                      >
-                        <Pencil size={16} weight="bold" />
-                      </button>
-                      <ConfirmButton
-                        accion={<Trash size={14} weight="bold" />}
-                        titulo="Eliminar movimiento"
-                        mensaje="¿Desea eliminar este movimiento? La acción se propagará al sincronizar."
-                        confirmar={async () => {
-                          const resultado = await new MovimientoController().eliminarMovimiento(m.id)
-                          if (resultado.exito) {
-                            avisarExito(resultado.mensaje)
-                            await cargar()
-                          } else {
-                            avisarError(resultado.mensaje)
-                          }
-                        }}
-                      />
-                    </div>
-                  </Celda>
+                  {esAdmin ? (
+                    <Celda className="text-right">
+                      <div className="inline-flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEdicion(m)}
+                          aria-label="Modificar movimiento"
+                          className="focus-ring rounded-full p-2 text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                        >
+                          <Pencil size={16} weight="bold" />
+                        </button>
+                        <ConfirmButton
+                          accion={<Trash size={14} weight="bold" />}
+                          titulo="Eliminar movimiento"
+                          mensaje="¿Desea eliminar este movimiento? La acción se propagará al sincronizar."
+                          confirmar={async () => {
+                            const resultado = await new MovimientoController().eliminarMovimiento(m.id)
+                            if (resultado.exito) {
+                              avisarExito(resultado.mensaje)
+                              await cargar()
+                            } else {
+                              avisarError(resultado.mensaje)
+                            }
+                          }}
+                        />
+                      </div>
+                    </Celda>
+                  ) : null}
                 </tr>
               )
             })}

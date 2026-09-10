@@ -121,9 +121,11 @@ y `metadatos`).
   con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`/
   `SoloConCuenta` protegen las rutas; invitado navega sin sesión a productos.
 - Roles: `TIPO_ADMIN` (edita todo), `TIPO_REGISTRADO` (solo lectura en
-  resumen/productos/deudas) e `INVITADO` (solo consulta productos). Guardas en
-  `src/App.tsx`: `SoloAdministrador` en movimientos/usuarios/alertas;
-  `SoloConCuenta` en resumenes/deudas; los botones de modificación se ocultan
+  resumen/productos/movimientos/deudas) e `INVITADO` (solo consulta
+  productos). Guardas en
+  `src/App.tsx`: `SoloAdministrador` en usuarios/alertas;
+  `SoloConCuenta` en movimientos/resumenes/deudas; los botones de modificación
+  se ocultan
   según `esAdmin` en las vistas. Solicitudes de permiso en `solicitudes_admin`
   (pendiente/aprobada/rechazada).
 - **Decisión global del administrador (AL-05):** el primer admin no se decide

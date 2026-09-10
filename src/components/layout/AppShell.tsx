@@ -40,7 +40,7 @@ const ITEMS: Array<{
 }> = [
   { ruta: '/resumenes', etiqueta: 'Resúmenes', icono: ChartBar, lecturaRegistrado: true },
   { ruta: '/productos', etiqueta: 'Productos', icono: Package },
-  { ruta: '/movimientos', etiqueta: 'Ingresos y egresos', icono: ArrowsLeftRight, soloAdmin: true },
+  { ruta: '/movimientos', etiqueta: 'Ingresos y egresos', icono: ArrowsLeftRight, lecturaRegistrado: true },
   { ruta: '/deudas', etiqueta: 'Deudas y pagos', icono: HandCoins, lecturaRegistrado: true },
   { ruta: '/usuarios', etiqueta: 'Usuarios', icono: UserCircle, soloAdmin: true },
   { ruta: '/alertas', etiqueta: 'Alertas', icono: BellRinging, soloAdmin: true },
@@ -56,7 +56,7 @@ const HUB_MOVILES: Array<{
 }> = [
   { ruta: '/resumenes', etiqueta: 'Resumen', icono: ChartBar, lecturaRegistrado: true },
   { ruta: '/productos', etiqueta: 'Productos', icono: Package },
-  { ruta: '/movimientos', etiqueta: 'Ingresos', icono: ArrowsLeftRight, soloAdmin: true },
+  { ruta: '/movimientos', etiqueta: 'Ingresos', icono: ArrowsLeftRight, lecturaRegistrado: true },
   { ruta: '/deudas', etiqueta: 'Deudas', icono: HandCoins, lecturaRegistrado: true },
 ]
 

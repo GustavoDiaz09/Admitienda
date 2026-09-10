@@ -25,13 +25,14 @@ o la computadora.
 3. Si ya existe un administrador y quieres serlo, marca *Solicitar permiso de
    administrador*: tu petición queda pendiente de aprobación.
 
-**Los usuarios** pueden consultar (solo lectura) **Resúmenes**, **Productos** y
-**Deudas y pagos**; solo los administradores pueden crear, editar o eliminar
-esos registros.
+**Los usuarios** pueden consultar (solo lectura) **Resúmenes**, **Productos**,
+**Ingresos y egresos** y **Deudas y pagos**; solo los administradores pueden
+crear, editar o eliminar esos registros.
 
-> Cualquier persona puede registrarse; la **primera cuenta creada** es la
-> administradora. Las siguientes quedan como usuarios registrados (solo
-> lectura) hasta que un administrador apruebe su permiso.
+> Cualquier persona puede registrarse. La **primera cuenta de todo el sistema**
+> es la administradora (la nube lo confirma). Si ya existe un administrador, o
+> el dispositivo no puede confirmarlo, quedas como usuario registrado (solo
+> lectura) hasta que un administrador apruebe tu permiso.
 
 ### 1.2 Recuperar la contraseña
 
@@ -44,7 +45,7 @@ contraseña nueva.
 | Rol          | Qué puede hacer                                                        |
 |--------------|------------------------------------------------------------------------|
 | **Invitado** | Entrar como invitado y ver la tabla de productos (solo lectura).       |
-| **Registrado**| Ver productos y solicitar permiso de administrador.                   |
+| **Registrado**| Consultar en solo lectura Resúmenes, Productos, Ingresos y egresos y Deudas; solicitar permiso de administrador. |
 | **Administrador** | Todo: productos, movimientos, resúmenes, usuarios y alertas.   |
 
 Como invitado puedes pulsar *Entrar como invitado* en la pantalla de ingreso
