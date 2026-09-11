@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   CloudArrowDown,
   CloudArrowUp,
@@ -36,6 +37,8 @@ export function SyncIndicator() {
   const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
   const { enLinea, pendientes, sincronizando, ultimaSync, error, llaveInvalida } = useSyncStore()
   const [abierto, setAbierto] = useState(false)
+  const botonRef = useRef<HTMLButtonElement>(null)
+  const [ancla, setAncla] = useState<{ abajo: number; derecha: number; esMovil: boolean } | null>(null)
   const [accionActiva, setAccionActiva] = useState<TipoAccionSync | null>(null)
   const [llaveTexto, setLlaveTexto] = useState(obtenerLlave())
   const [infoAlmacenamiento, setInfoAlmacenamiento] = useState<InfoAlmacenamiento | null>(null)
@@ -53,6 +56,17 @@ export function SyncIndicator() {
         ? 'En línea'
         : 'Sin conexión'
   const estadoColor = llaveInvalida || !hayLlave ? 'bg-amber-500' : enLinea ? 'bg-emerald-500' : 'bg-red-400'
+
+  const alternarPanel = () => {
+    if (abierto) {
+      setAbierto(false)
+      return
+    }
+    const rect = botonRef.current?.getBoundingClientRect()
+    const esPantallaMovil = window.matchMedia('(max-width: 639px)').matches
+    setAncla(rect ? { abajo: rect.bottom, derecha: window.innerWidth - rect.right, esMovil: esPantallaMovil } : null)
+    setAbierto(true)
+  }
 
   useEffect(() => {
     let activo = true
@@ -133,7 +147,8 @@ export function SyncIndicator() {
     <div className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setAbierto((abierto) => !abierto)}
+        ref={botonRef}
+        onClick={alternarPanel}
         aria-expanded={abierto}
         className="focus-ring inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1.5 pl-3 pr-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
       >
@@ -162,10 +177,27 @@ export function SyncIndicator() {
         )}
       </button>
 
-      {abierto ? (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} aria-hidden="true" />
-          <div className="animate-aparecer fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-zinc-200 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-pop sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[min(32rem,calc(100vh-6rem))] sm:w-80 sm:overflow-y-auto sm:rounded-2xl sm:pb-4">
+      {abierto
+        ? createPortal(
+            <div className="fixed inset-0 z-[60]">
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setAbierto(false)}
+                aria-hidden="true"
+              />
+              <div
+                className={cn(
+                  'animate-aparecer border border-zinc-200 bg-white p-4 shadow-pop',
+                  ancla?.esMovil
+                    ? 'fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]'
+                    : 'fixed z-50 max-h-[min(32rem,calc(100vh-6rem))] w-80 overflow-y-auto rounded-2xl',
+                )}
+                style={
+                  ancla && !ancla.esMovil
+                    ? { top: ancla.abajo + 8, right: ancla.derecha }
+                    : undefined
+                }
+              >
             <button
               type="button"
               onClick={() => setAbierto(false)}
@@ -343,8 +375,10 @@ export function SyncIndicator() {
             </div>
           </div>
           </div>
-        </>
-      ) : null}
+          </div>,
+          document.body,
+        )
+      : null}
 
       <Modal
         abierto={pasoOnboarding !== 'cerrado'}
