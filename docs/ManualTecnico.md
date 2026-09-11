@@ -180,14 +180,22 @@ Reglas de negocio de integridad:
 - Sesión en store Zustand + sessionStorage (`sistematienda.sesion`), restaurada
   con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`/
   `SoloConCuenta` protegen las rutas; invitado navega sin sesión a productos.
-- Roles: `TIPO_ADMIN` (edita todo), `TIPO_REGISTRADO` (solo lectura en
-  resumen/productos/movimientos/deudas) e `INVITADO` (solo consulta
-  productos). Guardas en
+- Roles: `TIPO_ADMIN` (edita todo), `TIPO_SUPERADMIN` (cuenta única del dueño,
+  por encima del admin: `esRolAdministrativo` lo incluye en cada guarda; da y
+  quita el rol de administrador con `UsuarioController.cambiarRolDeUsuario` y
+  puede eliminar administradores incluso al último, mientras que su propia
+  cuenta es inamovible: no se elimina, no se renombra y no cambia de rol),
+  `TIPO_REGISTRADO` (solo lectura en resumen/productos/movimientos/deudas) e
+  `INVITADO` (solo consulta productos). Guardas en
   `src/App.tsx`: `SoloAdministrador` en usuarios/alertas;
   `SoloConCuenta` en movimientos/resumenes/deudas; los botones de modificación
   se ocultan
   según `esAdmin` en las vistas. Solicitudes de permiso en `solicitudes_admin`
-  (pendiente/aprobada/rechazada).
+  (pendiente/aprobada/rechazada). El rol SUPERADMIN se otorga una sola vez en
+  la nube (migración `superadmin_unico_y_promocion_dueno`: índice único parcial
+  `uq_usuarios_superadmin` + UPDATE de la cuenta del dueño); la Edge Function
+  valida que el SUPERADMIN solo corresponda a esa cuenta fija, que jamás se
+  tumbe y que el nombre del dueño no se pueda subir con otro rol.
 - **Decisión global del administrador (AL-05):** el primer admin no se decide
   por dispositivo. Al registrarse, `UsuarioController` consulta la Edge
   Function (`accion=hay_admin`) y solo promueve si la nube confirma que NO hay

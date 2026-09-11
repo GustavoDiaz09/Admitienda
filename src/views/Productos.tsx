@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MagnifyingGlass, Package, Pencil, Plus, Trash, Storefront } from '@phosphor-icons/react'
 import { useSesionStore } from '../controller/SessionController'
 import { ProductoController, calcularPrecioDeVenta } from '../controller/ProductoController'
-import { TIPO_ADMIN } from '../model/types'
+import { esRolAdministrativo } from '../model/types'
 import type { Producto } from '../model/types'
 import { actualizarConteoAlertas } from '../lib/conteoAlertas'
 import { moneda } from '../lib/formato'
@@ -23,7 +23,9 @@ import { estadoDeProducto } from '../lib/estadoProducto'
 
 /** Vista de la tabla de productos (CRUD solo administrador). */
 export function Productos() {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const esAdmin = useSesionStore(
+    (estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario),
+  )
   const [productos, setProductos] = useState<Producto[] | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [edicion, setEdicion] = useState<Producto | null | 'nuevo'>(null)

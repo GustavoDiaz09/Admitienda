@@ -102,4 +102,65 @@ describe('Contrato del esquema del edge (allow-list de subir)', () => {
     )
     expect(invalido).toBeNull()
   })
+
+  it('rechaza un SUPERADMIN con otro nombre (la cuenta del dueño es única)', () => {
+    const invalido = primerCampoInvalido(
+      'usuarios',
+      filaBase('33333333-3333-4333-8333-333333333333', {
+        nombre_usuario: 'Pedro',
+        tipo_usuario: 'SUPERADMIN',
+        contrasena_hash: 'abc',
+        salt: 'def',
+        indicio_usuario: 'clave',
+        fecha_registro: '2026-01-01 10:00',
+      }),
+    )
+    expect(invalido).toContain('SUPERADMIN')
+  })
+
+  it('acepta el SUPERADMIN fijo de la cuenta del dueño', () => {
+    const invalido = primerCampoInvalido(
+      'usuarios',
+      filaBase('33333333-3333-4333-8333-333333333333', {
+        nombre_usuario: 'Gustavo',
+        tipo_usuario: 'SUPERADMIN',
+        contrasena_hash: 'abc',
+        salt: 'def',
+        indicio_usuario: 'clave',
+        fecha_registro: '2026-01-01 10:00',
+      }),
+    )
+    expect(invalido).toBeNull()
+  })
+
+  it('rechaza que la cuenta del dueño se suba con otro rol', () => {
+    const invalido = primerCampoInvalido(
+      'usuarios',
+      filaBase('33333333-3333-4333-8333-333333333333', {
+        nombre_usuario: 'Gustavo',
+        tipo_usuario: 'ADMIN',
+        contrasena_hash: 'abc',
+        salt: 'def',
+        indicio_usuario: 'clave',
+        fecha_registro: '2026-01-01 10:00',
+      }),
+    )
+    expect(invalido).toContain('Gustavo')
+  })
+
+  it('rechaza la tumba de la cuenta SUPERADMIN', () => {
+    const invalido = primerCampoInvalido(
+      'usuarios',
+      filaBase('33333333-3333-4333-8333-333333333333', {
+        nombre_usuario: 'Gustavo',
+        tipo_usuario: 'SUPERADMIN',
+        eliminado: true,
+        contrasena_hash: 'abc',
+        salt: 'def',
+        indicio_usuario: 'clave',
+        fecha_registro: '2026-01-01 10:00',
+      }),
+    )
+    expect(invalido).toContain('no se puede eliminar')
+  })
 })

@@ -1,8 +1,19 @@
-import type { SolicitudAdmin, Usuario } from '../model/types'
-import { TIPO_ADMIN, TIPO_REGISTRADO, ESTADO_PENDIENTE, ESTADO_APROBADA, ESTADO_RECHAZADA } from '../model/types'
+import type { SolicitudAdmin, TipoUsuario, Usuario } from '../model/types'
+import {
+  esRolAdministrativo,
+  esSuperadmin,
+  NOMBRE_SUPERADMIN,
+  TIPO_ADMIN,
+  TIPO_REGISTRADO,
+  TIPO_SUPERADMIN,
+  ESTADO_PENDIENTE,
+  ESTADO_APROBADA,
+  ESTADO_RECHAZADA,
+} from '../model/types'
 import { UsuarioDao } from '../dao/UsuarioDao'
 import { SolicitudAdminDao } from '../dao/SolicitudAdminDao'
 import { Resultado } from './Resultado'
+import { useSesionStore } from './SessionController'
 import {
   contrasenaValida,
   esHashMigrable,
@@ -103,6 +114,11 @@ export class UsuarioController {
       )
     }
     const nombreLimpio = nombreDeUsuario.trim()
+    if (nombreLimpio.toLowerCase() === NOMBRE_SUPERADMIN.toLowerCase()) {
+      return Resultado.error(
+        `El nombre "${NOMBRE_SUPERADMIN}" pertenece a la cuenta SUPERADMIN y no se puede registrar.`,
+      )
+    }
     if (await this.usuarioDao.existeNombre(nombreLimpio)) {
       return Resultado.error('Ya existe un usuario con ese nombre. Elija otro.')
     }
@@ -260,8 +276,8 @@ export class UsuarioController {
     if (!usuario) {
       return Resultado.error('El usuario no existe.')
     }
-    if (usuario.tipo_usuario === TIPO_ADMIN) {
-      return Resultado.error('Ese usuario ya es administrador.')
+    if (esRolAdministrativo(usuario.tipo_usuario)) {
+      return Resultado.error('Ese usuario ya tiene permisos de administración.')
     }
     if (await this.solicitudDao.tieneSolicitudPendiente(idDeUsuario)) {
       return Resultado.error('Ya tiene una solicitud pendiente de revisión.')
@@ -270,12 +286,23 @@ export class UsuarioController {
     return Resultado.exito('Solicitud enviada. Un administrador la revisará.')
   }
 
-  /** Modifica el nombre de usuario y el indicio de seguridad. */
+  /** Modifica el nombre de usuario y el indicio de seguridad. La cuenta
+   * SUPERADMIN solo puede editarla su propio dueño y debe conservar el
+   * nombre fijo (el rol es único en la nube, ligado a esa cuenta). */
   async modificarUsuario(
     usuario: Usuario,
     nuevoNombre: string,
     nuevoIndicio: string,
   ): Promise<Resultado> {
+    if (usuario.tipo_usuario === TIPO_SUPERADMIN) {
+      const actor = useSesionStore.getState().usuarioActivo
+      if (!actor || actor.id !== usuario.id) {
+        return Resultado.error('Solo el SUPERADMIN puede modificar su propia cuenta.')
+      }
+      if (nuevoNombre.trim().toLowerCase() !== NOMBRE_SUPERADMIN.toLowerCase()) {
+        return Resultado.error(`El SUPERADMIN debe conservar su nombre ("${NOMBRE_SUPERADMIN}").`)
+      }
+    }
     const errorNombre = textoNoVacio(nuevoNombre, 'nombre de usuario')
     if (errorNombre) {
       return Resultado.error(errorNombre)
@@ -298,12 +325,15 @@ export class UsuarioController {
   }
 
   /**
-   * Elimina un usuario; no permite eliminar el último administrador. La tumba
-   * del usuario y el rechazo de sus solicitudes de permiso PENDIENTE (para no
-   * dejar huérfanas) se hacen en una misma transacción Dexie: o se aplican
-   * todas, o ninguna, con un solo encolado y un único `sincronizarAhora()`.
+   * Elimina un usuario. El SUPERADMIN (cuenta única del dueño) no se puede
+   * eliminar por nadie; el SUPERADMIN sí puede eliminar administradores
+   * (incluso el último), mientras que el admin conserva la protección de no
+   * poder eliminar al último admin. La tumba del usuario y el rechazo de sus
+   * solicitudes de permiso PENDIENTE se hacen en una misma transacción Dexie:
+   * o se aplican todas, o ninguna, con un solo encolado y un único
+   * `sincronizarAhora()`.
    */
-  async eliminarUsuario(idDeUsuario: string): Promise<Resultado> {
+  async eliminarUsuario(idDeUsuario: string, idDeActor?: string): Promise<Resultado> {
     const contexto = {
       silencioso: true,
       dispositivo: await obtenerDispositivoId(),
@@ -318,9 +348,16 @@ export class UsuarioController {
           if (!usuario) {
             throw new Error('El usuario no existe.')
           }
+          if (usuario.tipo_usuario === TIPO_SUPERADMIN) {
+            throw new Error('La cuenta SUPERADMIN no se puede eliminar.')
+          }
+          const actorId = idDeActor ?? useSesionStore.getState().usuarioActivo?.id
+          const actor = actorId ? await this.usuarioDao.buscarPorId(actorId) : undefined
+          const elActorEsSuperadmin = esSuperadmin(actor?.tipo_usuario)
           if (
+            !elActorEsSuperadmin &&
             usuario.tipo_usuario === TIPO_ADMIN &&
-            (await this.usuarioDao.contarAdministradores()) <= 1
+            (await this.usuarioDao.contarAdminsPuros()) <= 1
           ) {
             throw new Error('No se puede eliminar el último administrador del sistema.')
           }
@@ -343,6 +380,44 @@ export class UsuarioController {
     }
     void sincronizarAhora()
     return Resultado.exito(`Usuario "${nombreEliminado}" eliminado.`)
+  }
+
+  /**
+   * Da o quita el rol de administrador a un usuario. Solo el SUPERADMIN puede
+   * cambiar roles (queda por encima del admin, que sigue usando las
+   * solicitudes). El rol SUPERADMIN es único y no se asigna aquí: está ligado
+   * a la cuenta fija del dueño y solo se otorga en la nube.
+   */
+  async cambiarRolDeUsuario(
+    idDeUsuario: string,
+    nuevoTipo: TipoUsuario,
+    idDeActor?: string,
+  ): Promise<Resultado> {
+    if (nuevoTipo !== TIPO_ADMIN && nuevoTipo !== TIPO_REGISTRADO) {
+      return Resultado.error('Aquí solo se puede dar o quitar el rol de administrador.')
+    }
+    const actorId = idDeActor ?? useSesionStore.getState().usuarioActivo?.id
+    const actor = actorId ? await this.usuarioDao.buscarPorId(actorId) : undefined
+    if (!esSuperadmin(actor?.tipo_usuario)) {
+      return Resultado.error('Solo el SUPERADMIN puede dar o quitar roles.')
+    }
+    const usuario = await this.usuarioDao.buscarPorId(idDeUsuario)
+    if (!usuario) {
+      return Resultado.error('El usuario no existe.')
+    }
+    if (usuario.tipo_usuario === TIPO_SUPERADMIN) {
+      return Resultado.error('El rol de la cuenta SUPERADMIN no se puede modificar.')
+    }
+    if (usuario.tipo_usuario === nuevoTipo) {
+      return Resultado.error(
+        nuevoTipo === TIPO_ADMIN
+          ? 'Ese usuario ya es administrador.'
+          : 'Ese usuario ya es registrado.',
+      )
+    }
+    const rolEtiqueta = nuevoTipo === TIPO_ADMIN ? 'administrador' : 'registrado'
+    await this.usuarioDao.actualizar({ ...usuario, tipo_usuario: nuevoTipo })
+    return Resultado.exito(`"${usuario.nombre_usuario}" ahora es ${rolEtiqueta}.`)
   }
 
   /**

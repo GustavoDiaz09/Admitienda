@@ -17,7 +17,7 @@ import {
 import { useSesionStore } from '../../controller/SessionController'
 import { UsuarioController } from '../../controller/UsuarioController'
 import { UsuarioDao } from '../../dao/UsuarioDao'
-import { TIPO_ADMIN, TIPO_REGISTRADO } from '../../model/types'
+import { esRolAdministrativo, TIPO_REGISTRADO, TIPO_SUPERADMIN } from '../../model/types'
 import { actualizarConteoAlertas, useAlertasStore } from '../../lib/conteoAlertas'
 import { avisarError, avisarExito } from '../../lib/toast'
 import { cn } from '../../lib/cn'
@@ -72,7 +72,7 @@ export function AppShell() {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [cambiarContrasenaAbierto, setCambiarContrasenaAbierto] = useState(false)
 
-  const esAdmin = usuarioActivo?.tipo_usuario === TIPO_ADMIN
+  const esAdmin = esRolAdministrativo(usuarioActivo?.tipo_usuario)
   const esRegistrado = usuarioActivo?.tipo_usuario === TIPO_REGISTRADO
 
   const revalidarSesionActiva = async () => {
@@ -268,10 +268,18 @@ export function AppShell() {
                 <span
                   className={cn(
                     'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                    esAdmin ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500',
+                    usuarioActivo.tipo_usuario === TIPO_SUPERADMIN
+                      ? 'bg-sky-100 text-sky-700'
+                      : esAdmin
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-zinc-100 text-zinc-500',
                   )}
                 >
-                  {esAdmin ? 'ADMIN' : 'REGISTRADO'}
+                  {usuarioActivo.tipo_usuario === TIPO_SUPERADMIN
+                    ? 'SUPERADMIN'
+                    : esAdmin
+                      ? 'ADMIN'
+                      : 'REGISTRADO'}
                 </span>
               ) : null}
             </span>

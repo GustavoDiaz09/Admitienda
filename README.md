@@ -21,7 +21,10 @@ de la app de escritorio `SistemaTienda` (Java + Swing), con lo novedoso de que
   historial por cliente con sus deudas y pagos realizados (cada abono se
   registra como ingreso en la caja).
 - **Roles:** INVITADO (solo ver productos), REGISTRADO (ver productos +
-  solicitar permiso de admin), ADMINISTRADOR (acceso completo).
+  solicitar permiso de admin), ADMINISTRADOR (acceso completo) y SUPERADMIN
+  (cuenta única del dueño, por encima del admin: da/quita el rol de
+  administrador directamente y puede eliminar administradores incluso al
+  último; la suya jamás se elimina).
 - **Autenticación local** (por dispositivo) compatible con la app de escritorio.
 
 ## Requisitos

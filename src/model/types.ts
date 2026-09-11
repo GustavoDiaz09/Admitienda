@@ -34,10 +34,29 @@ export type TablaSync =
 /** Tipo de usuario: administrador (acceso completo). */
 export const TIPO_ADMIN = 'ADMIN'
 
+/** Tipo de usuario: superadministrador único (el dueño), por encima de los admins. */
+export const TIPO_SUPERADMIN = 'SUPERADMIN'
+
+/** Nombre fijo de la cuenta que puede ser SUPERADMIN (única en la nube). */
+export const NOMBRE_SUPERADMIN = 'Gustavo'
+
 /** Tipo de usuario: registrado (puede gestionar su cuenta, no los datos). */
 export const TIPO_REGISTRADO = 'REGISTRADO'
 
-export type TipoUsuario = typeof TIPO_ADMIN | typeof TIPO_REGISTRADO
+export type TipoUsuario =
+  | typeof TIPO_ADMIN
+  | typeof TIPO_SUPERADMIN
+  | typeof TIPO_REGISTRADO
+
+/** Indica si el rol tiene poder administrativo (ADMIN o SUPERADMIN). */
+export function esRolAdministrativo(tipo: TipoUsuario | null | undefined): boolean {
+  return tipo === TIPO_ADMIN || tipo === TIPO_SUPERADMIN
+}
+
+/** Indica si el rol es el SUPERADMIN (cuenta del dueño). */
+export function esSuperadmin(tipo: TipoUsuario | null | undefined): boolean {
+  return tipo === TIPO_SUPERADMIN
+}
 
 /** Usuario del sistema (autenticación local con hash SHA-256 + salt). */
 export interface Usuario extends RegistroBase {

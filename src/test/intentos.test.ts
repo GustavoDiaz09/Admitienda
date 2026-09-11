@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+﻿import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../lib/db'
 import { inicializarApp } from '../lib/inicializacion'
 import { UsuarioController } from '../controller/UsuarioController'
@@ -22,7 +22,7 @@ beforeEach(async () => {
 })
 
 describe('Backoff del indicio de seguridad', () => {
-  it('no bloquea antes de alcanzar el límite de fallos', () => {
+  it('no bloquea antes de alcanzar el lÃ­mite de fallos', () => {
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS - 1; i++) {
       const estado = registrarFalloDeIndicio('admin')
       expect(estado.bloqueado).toBe(false)
@@ -30,7 +30,7 @@ describe('Backoff del indicio de seguridad', () => {
     }
   })
 
-  it('bloquea al cruzar el límite con la espera inicial', () => {
+  it('bloquea al cruzar el lÃ­mite con la espera inicial', () => {
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
       registrarFalloDeIndicio('admin')
     }
@@ -55,7 +55,7 @@ describe('Backoff del indicio de seguridad', () => {
     expect(sexto.esperaRestanteMs).toBeLessThanOrEqual(ESPERA_INICIAL_MS * 2 + 2000)
   })
 
-  it('acota la espera al tope máximo', () => {
+  it('acota la espera al tope mÃ¡ximo', () => {
     let ultimo!: EstadoBloqueo
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS + 22; i++) {
       ultimo = registrarFalloDeIndicio('admin')
@@ -79,7 +79,7 @@ describe('Backoff del indicio de seguridad', () => {
     expect(estado.fallos).toBe(0)
   })
 
-  it('no bloquea y limpia el registro cuando la espera ya venció', () => {
+  it('no bloquea y limpia el registro cuando la espera ya venciÃ³', () => {
     window.localStorage.setItem(
       'indicio:bloqueo:admin',
       JSON.stringify({ fallos: 9, bloqueadoHasta: Date.now() - 1000 }),
@@ -128,76 +128,76 @@ describe('Backoff del indicio de seguridad', () => {
   })
 })
 
-describe('Backoff del inicio de sesión', () => {
-  it('no bloquea el login antes de alcanzar el límite de fallos', () => {
+describe('Backoff del inicio de sesiÃ³n', () => {
+  it('no bloquea el login antes de alcanzar el lÃ­mite de fallos', () => {
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS - 1; i++) {
-      const estado = registrarFallo('login', 'gustavo')
+      const estado = registrarFallo('login', 'julieta')
       expect(estado.bloqueado).toBe(false)
     }
   })
 
-  it('bloquea el login al cruzar el límite y consulta el estado restante', () => {
+  it('bloquea el login al cruzar el lÃ­mite y consulta el estado restante', () => {
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
-      registrarFallo('login', 'gustavo')
+      registrarFallo('login', 'julieta')
     }
-    const estado = consultarBloqueo('login', 'gustavo')
+    const estado = consultarBloqueo('login', 'julieta')
     expect(estado.bloqueado).toBe(true)
     expect(estado.esperaRestanteMs).toBeGreaterThanOrEqual(ESPERA_INICIAL_MS - 1000)
     expect(estado.esperaRestanteMs).toBeLessThanOrEqual(ESPERA_INICIAL_MS + 1000)
   })
 
-  it('el controlador rechaza el inicio con la contraseña incorrecta y bloquea tras 5 fallos', async () => {
+  it('el controlador rechaza el inicio con la contraseÃ±a incorrecta y bloquea tras 5 fallos', async () => {
     await inicializarApp()
     const controlador = new UsuarioController()
-    await controlador.registrarUsuario('gustavo', 'clave123', 'mi perro', false, async () => false)
+    await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
-      expect(await controlador.iniciarSesion('gustavo', 'equivocada')).toBeNull()
+      expect(await controlador.iniciarSesion('julieta', 'equivocada')).toBeNull()
     }
-    expect((await controlador.consultarBloqueoDeLogin('gustavo')).bloqueado).toBe(true)
+    expect((await controlador.consultarBloqueoDeLogin('julieta')).bloqueado).toBe(true)
   })
 
   it('el controlador no verifica credenciales bloqueadas sin contar fallos extra', async () => {
     await inicializarApp()
     const controlador = new UsuarioController()
-    await controlador.registrarUsuario('gustavo', 'clave123', 'mi perro', false, async () => false)
+    await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
-      await controlador.iniciarSesion('gustavo', 'equivocada')
+      await controlador.iniciarSesion('julieta', 'equivocada')
     }
-    const antes = (await controlador.consultarBloqueoDeLogin('gustavo')).fallos
-    expect(await controlador.iniciarSesion('gustavo', 'clave123')).toBeNull()
-    const despues = (await controlador.consultarBloqueoDeLogin('gustavo'))
+    const antes = (await controlador.consultarBloqueoDeLogin('julieta')).fallos
+    expect(await controlador.iniciarSesion('julieta', 'clave123')).toBeNull()
+    const despues = (await controlador.consultarBloqueoDeLogin('julieta'))
     expect(despues.bloqueado).toBe(true)
     expect(despues.fallos).toBe(antes)
   })
 
-  it('el controlador limpia los fallos al iniciar sesión correctamente', async () => {
+  it('el controlador limpia los fallos al iniciar sesiÃ³n correctamente', async () => {
     await inicializarApp()
     const controlador = new UsuarioController()
-    await controlador.registrarUsuario('gustavo', 'clave123', 'mi perro', false, async () => false)
+    await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
-    await controlador.iniciarSesion('gustavo', 'equivocada')
-    await controlador.iniciarSesion('gustavo', 'equivocada')
-    expect((await controlador.consultarBloqueoDeLogin('gustavo')).fallos).toBe(2)
+    await controlador.iniciarSesion('julieta', 'equivocada')
+    await controlador.iniciarSesion('julieta', 'equivocada')
+    expect((await controlador.consultarBloqueoDeLogin('julieta')).fallos).toBe(2)
 
-    expect(await controlador.iniciarSesion('gustavo', 'clave123')).not.toBeNull()
-    const estado = await controlador.consultarBloqueoDeLogin('gustavo')
+    expect(await controlador.iniciarSesion('julieta', 'clave123')).not.toBeNull()
+    const estado = await controlador.consultarBloqueoDeLogin('julieta')
     expect(estado.bloqueado).toBe(false)
     expect(estado.fallos).toBe(0)
   })
 
   it('login e indicio usan registros independientes para el mismo nombre', () => {
-    registrarFallo('login', 'gustavo')
-    registrarFallo('login', 'gustavo')
-    registrarFallo('login', 'gustavo')
-    registrarFallo('login', 'gustavo')
-    registrarFallo('login', 'gustavo')
+    registrarFallo('login', 'julieta')
+    registrarFallo('login', 'julieta')
+    registrarFallo('login', 'julieta')
+    registrarFallo('login', 'julieta')
+    registrarFallo('login', 'julieta')
 
-    expect(consultarBloqueo('login', 'gustavo').bloqueado).toBe(true)
-    expect(consultarBloqueo('indicio', 'gustavo').bloqueado).toBe(false)
+    expect(consultarBloqueo('login', 'julieta').bloqueado).toBe(true)
+    expect(consultarBloqueo('indicio', 'julieta').bloqueado).toBe(false)
 
-    registrarIndicioCorrecto('gustavo')
-    expect(consultarBloqueo('login', 'gustavo').bloqueado).toBe(true)
+    registrarIndicioCorrecto('julieta')
+    expect(consultarBloqueo('login', 'julieta').bloqueado).toBe(true)
   })
 })

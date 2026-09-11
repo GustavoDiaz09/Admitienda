@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
       const { count, error } = await supabase
         .from('usuarios')
         .select('id', { count: 'exact', head: true })
-        .eq('tipo_usuario', 'ADMIN')
+        .in('tipo_usuario', ['ADMIN', 'SUPERADMIN'])
       if (error) {
         console.error('hay_admin:', error.message)
         return jsonDatos(500, { error: 'No se pudo consultar el estado de administradores.' })

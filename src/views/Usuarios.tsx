@@ -2,19 +2,27 @@ import type { FormEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   Check,
+  Crown,
   Pencil,
   ShieldCheck,
+  ShieldSlash,
   Trash,
   UsersThree,
   X,
 } from '@phosphor-icons/react'
 import { UsuarioController } from '../controller/UsuarioController'
+import { useSesionStore } from '../controller/SessionController'
 import {
+  esRolAdministrativo,
+  esSuperadmin,
   TIPO_ADMIN,
+  TIPO_REGISTRADO,
+  TIPO_SUPERADMIN,
   ESTADO_APROBADA,
   ESTADO_PENDIENTE,
   type EstadoSolicitud,
   type SolicitudAdmin,
+  type TipoUsuario,
   type Usuario,
 } from '../model/types'
 import { avisarError, avisarExito } from '../lib/toast'
@@ -57,6 +65,8 @@ export function Usuarios() {
   const [solicitudes, setSolicitudes] = useState<SolicitudAdmin[] | null>(null)
   const [edicion, setEdicion] = useState<Usuario | null>(null)
   const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
+  const usuarioActivo = useSesionStore((estado) => estado.usuarioActivo)
+  const soySuperadmin = esSuperadmin(usuarioActivo?.tipo_usuario)
 
   const cargarUsuarios = useCallback(async () => {
     try {
@@ -100,6 +110,16 @@ export function Usuarios() {
   }
 
   const eliminadoConExito = async (resultado: { exito: boolean; mensaje: string }) => {
+    if (resultado.exito) {
+      avisarExito(resultado.mensaje)
+    } else {
+      avisarError(resultado.mensaje)
+    }
+    await cargarUsuarios()
+  }
+
+  const cambiarRolConExito = async (usuario: Usuario, nuevoTipo: TipoUsuario) => {
+    const resultado = await new UsuarioController().cambiarRolDeUsuario(usuario.id, nuevoTipo)
     if (resultado.exito) {
       avisarExito(resultado.mensaje)
     } else {
@@ -156,50 +176,111 @@ export function Usuarios() {
             />
           ) : (
             <Tabla encabezados={['Nombre de usuario', 'Rol', '']}>
-              {usuarios.map((usuario) => (
-                <tr key={usuario.id} className="hover:bg-zinc-50/80">
-                  <Celda>
-                    <div className="flex items-center gap-3">
-                      <span className="grid size-8 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
-                        {usuario.nombre_usuario.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="font-medium text-zinc-900">{usuario.nombre_usuario}</span>
-                    </div>
-                  </Celda>
-                  <Celda>
-                    <Insignia tono={usuario.tipo_usuario === TIPO_ADMIN ? 'esmeralda' : 'gris'}>
-                      {usuario.tipo_usuario === TIPO_ADMIN ? 'Administrador' : 'Registrado'}
-                    </Insignia>
-                  </Celda>
-                  <Celda className="text-right">
-                    <div className="inline-flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setEdicion(usuario)}
-                        aria-label={`Modificar ${usuario.nombre_usuario}`}
-                        className="focus-ring rounded-full p-2 text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                      >
-                        <Pencil size={16} weight="bold" />
-                      </button>
-                      <ConfirmButton
-                        accion={<Trash size={14} weight="bold" />}
-                        titulo="Eliminar usuario"
-                        mensaje={
-                          <>
-                            ¿Desea eliminar a <b>{usuario.nombre_usuario}</b>? No se puede
-                            eliminar el último administrador del sistema.
-                          </>
+              {usuarios.map((usuario) => {
+                const esSuperbool = usuario.tipo_usuario === TIPO_SUPERADMIN
+                const rolEsAdministrativo = esRolAdministrativo(usuario.tipo_usuario)
+                const esMiCuenta = usuarioActivo?.id === usuario.id
+                return (
+                  <tr key={usuario.id} className="hover:bg-zinc-50/80">
+                    <Celda>
+                      <div className="flex items-center gap-3">
+                        <span className="grid size-8 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
+                          {usuario.nombre_usuario.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="font-medium text-zinc-900">{usuario.nombre_usuario}</span>
+                        {esSuperbool ? <Crown size={14} weight="fill" className="text-sky-600" /> : null}
+                      </div>
+                    </Celda>
+                    <Celda>
+                      <Insignia
+                        tono={
+                          esSuperbool
+                            ? 'azul'
+                            : usuario.tipo_usuario === TIPO_ADMIN
+                              ? 'esmeralda'
+                              : 'gris'
                         }
-                        disabled={usuario.tipo_usuario === TIPO_ADMIN}
-                        confirmar={async () => {
-                          const resultado = await new UsuarioController().eliminarUsuario(usuario.id)
-                          await eliminadoConExito(resultado)
-                        }}
-                      />
-                    </div>
-                  </Celda>
-                </tr>
-              ))}
+                      >
+                        {esSuperbool
+                          ? 'Superadministrador'
+                          : usuario.tipo_usuario === TIPO_ADMIN
+                            ? 'Administrador'
+                            : 'Registrado'}
+                      </Insignia>
+                    </Celda>
+                    <Celda className="text-right">
+                      <div className="inline-flex gap-1">
+                        {soySuperadmin && !esSuperbool ? (
+                          usuario.tipo_usuario === TIPO_REGISTRADO ? (
+                            <Button
+                              variante="secundario"
+                              tamanio="sm"
+                              icono={ShieldCheck}
+                              onClick={() => void cambiarRolConExito(usuario, TIPO_ADMIN)}
+                              aria-label={`Hacer administrador a ${usuario.nombre_usuario}`}
+                            >
+                              <span className="sr-only">Hacer administrador</span>
+                            </Button>
+                          ) : (
+                            <ConfirmButton
+                              accion={<ShieldSlash size={14} weight="bold" />}
+                              titulo="Quitar administrador"
+                              mensaje={
+                                <>
+                                  ¿Desea quitar el rol de administrador a{' '}
+                                  <b>{usuario.nombre_usuario}</b>? Quedará como usuario registrado.
+                                </>
+                              }
+                              variante="secundario"
+                              confirmar={async () => {
+                                await cambiarRolConExito(usuario, TIPO_REGISTRADO)
+                              }}
+                            />
+                          )
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setEdicion(usuario)}
+                          aria-label={`Modificar ${usuario.nombre_usuario}`}
+                          disabled={esSuperbool && !esMiCuenta}
+                          className="focus-ring rounded-full p-2 text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Pencil size={16} weight="bold" />
+                        </button>
+                        <ConfirmButton
+                          accion={<Trash size={14} weight="bold" />}
+                          titulo="Eliminar usuario"
+                          mensaje={
+                            esSuperbool ? (
+                              <>
+                                <b>{usuario.nombre_usuario}</b> es la cuenta SUPERADMIN del
+                                sistema y no se puede eliminar.
+                              </>
+                            ) : (
+                              <>
+                                ¿Desea eliminar a <b>{usuario.nombre_usuario}</b>?{' '}
+                                {rolEsAdministrativo && soySuperadmin
+                                  ? 'Como SUPERADMIN puede eliminar administradores.'
+                                  : 'No se puede eliminar el último administrador del sistema.'}
+                              </>
+                            )
+                          }
+                          disabled={
+                            esSuperbool ||
+                            (usuario.tipo_usuario === TIPO_ADMIN && !soySuperadmin)
+                          }
+                          confirmar={async () => {
+                            const resultado = await new UsuarioController().eliminarUsuario(
+                              usuario.id,
+                            )
+                            await eliminadoConExito(resultado)
+                          }}
+                        />
+                      </div>
+                    </Celda>
+                  </tr>
+                )
+              })}
             </Tabla>
           )}
         </Card>

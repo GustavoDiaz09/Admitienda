@@ -11,12 +11,7 @@ import {
 } from '@phosphor-icons/react'
 import { MovimientoController } from '../controller/MovimientoController'
 import { useSesionStore } from '../controller/SessionController'
-import {
-  TIPO_INGRESO,
-  TIPO_EGRESO,
-  TIPO_ADMIN,
-  type Movimiento,
-} from '../model/types'
+import { esRolAdministrativo, TIPO_INGRESO, TIPO_EGRESO, type Movimiento } from '../model/types'
 import { moneda } from '../lib/formato'
 import { avisarError, avisarExito } from '../lib/toast'
 import { Button } from '../components/ui/Button'
@@ -34,7 +29,9 @@ type FiltroMovimiento = 'TODOS' | 'INGRESO' | 'EGRESO'
 
 /** Historial de ingresos y egresos (lectura para REGISTRADO; edición solo ADMIN). */
 export function Movimientos() {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const esAdmin = useSesionStore(
+    (estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario),
+  )
   const [movimientos, setMovimientos] = useState<Movimiento[] | null>(null)
   const [totales, setTotales] = useState<{ ingresos: number; egresos: number } | null>(null)
   const [busqueda, setBusqueda] = useState('')

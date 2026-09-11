@@ -1,6 +1,6 @@
 import { db } from '../lib/db'
 import { nuevoRegistro, actualizarRegistro, eliminarRegistro, type ContextoEscritura } from '../lib/mutaciones'
-import { TIPO_ADMIN, type RegistroBase, type Usuario } from '../model/types'
+import { NOMBRE_SUPERADMIN, TIPO_ADMIN, TIPO_SUPERADMIN, type RegistroBase, type Usuario } from '../model/types'
 
 /**
  * Acceso a datos de usuarios (port de `tienda.dao.UserDao`). La
@@ -49,10 +49,24 @@ export class UsuarioDao {
       .sort((a, b) => a.nombre_usuario.localeCompare(b.nombre_usuario))
   }
 
-  /** Cuenta los administradores activos (siembra inicial y protección del último). */
+  /** Cuenta los usuarios con poder administrativo (ADMIN o SUPERADMIN) activos:
+   *  siembra inicial, protección del último y disponibilidad de permisos. */
   async contarAdministradores(): Promise<number> {
     const lista = await db.usuarios.toArray()
+    return lista.filter(
+      (u) => !u.eliminado && (u.tipo_usuario === TIPO_ADMIN || u.tipo_usuario === TIPO_SUPERADMIN),
+    ).length
+  }
+
+  /** Cuenta solo los administradores puros activos (excluye al SUPERADMIN). */
+  async contarAdminsPuros(): Promise<number> {
+    const lista = await db.usuarios.toArray()
     return lista.filter((u) => !u.eliminado && u.tipo_usuario === TIPO_ADMIN).length
+  }
+
+  /** `true` si el nombre corresponde a la cuenta fija del dueño (SUPERADMIN). */
+  esCuentaSuperadmin(nombreDeUsuario: string): boolean {
+    return (nombreDeUsuario ?? '').trim().toLowerCase() === NOMBRE_SUPERADMIN.toLowerCase()
   }
 
   /** Indica si algún usuario (activo o no) ocupa ese nombre. */

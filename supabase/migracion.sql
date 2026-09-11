@@ -183,6 +183,10 @@ create index if not exists idx_movimientos_fecha on public.movimientos (fecha);
 -- Si la tabla se creó antes con data duplicada, esta instrucción falla y
 -- hay que limpiar los duplicados primero.
 create unique index if not exists uq_usuarios_nombre on public.usuarios (lower(nombre_usuario));
+-- A lo sumo UNA cuenta SUPERADMIN: el índice parcial solo admite una fila con
+-- ese rol (la cuenta fija del dueño; la promoción es manual en la nube).
+create unique index if not exists uq_usuarios_superadmin on public.usuarios (tipo_usuario)
+  where tipo_usuario = 'SUPERADMIN';
 -- El índice simple por nombre pasa a ser redundante; se mantiene solo como
 -- índice no único de respaldo en caso de que la migración se interrumpa.
 create index if not exists idx_solicitudes_usuario on public.solicitudes_admin (usuario_id);

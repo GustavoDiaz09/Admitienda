@@ -2,7 +2,7 @@ import { Component, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Storefront } from '@phosphor-icons/react'
 import { restaurarSesion, useSesionStore } from './controller/SessionController'
-import { TIPO_ADMIN } from './model/types'
+import { esRolAdministrativo } from './model/types'
 import { inicializarApp } from './lib/inicializacion'
 import { iniciarMotorDeSync } from './sync/syncEngine'
 import { AppShell } from './components/layout/AppShell'
@@ -44,7 +44,7 @@ function RequiereSesion() {
 
 /** Restringe una ruta a administradores. */
 function SoloAdministrador({ children }: { children: ReactNode }) {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario === TIPO_ADMIN)
+  const esAdmin = useSesionStore((estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario))
   if (!esAdmin) {
     return <Navigate to="/productos" replace />
   }

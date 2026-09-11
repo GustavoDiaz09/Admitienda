@@ -13,7 +13,7 @@ import {
 import { MovimientoController } from '../controller/MovimientoController'
 import { ProductoController } from '../controller/ProductoController'
 import { useSesionStore } from '../controller/SessionController'
-import { TIPO_ADMIN } from '../model/types'
+import { esRolAdministrativo } from '../model/types'
 import { moneda, DIAS_CORTOS, MESES_CORTOS, horaCorta } from '../lib/formato'
 import { ejecutarAccionDeSync } from '../lib/syncAcciones'
 import { useSyncStore } from '../sync/syncEngine'
@@ -35,7 +35,9 @@ interface DatosResumen {
 
 /** Resúmenes financieros semanales y mensuales (lectura para registrados; sync solo admin). */
 export function Resumenes() {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const esAdmin = useSesionStore(
+    (estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario),
+  )
   const [datos, setDatos] = useState<DatosResumen | null>(null)
   const { enLinea, pendientes, ultimaSync } = useSyncStore()
   const [accion, setAccion] = useState<'sincronizar' | 'subir' | 'bajar' | null>(null)

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { TIPO_ADMIN, type Usuario } from '../model/types'
+import { esRolAdministrativo, type Usuario } from '../model/types'
 import { UsuarioDao } from '../dao/UsuarioDao'
 
 /** Clave usada para conservar la sesión durante la sesión del navegador. */
@@ -84,7 +84,7 @@ export const useSesionStore = create<SesionState>((set) => ({
 
 export function esAdministrador(): boolean {
   const { usuarioActivo } = useSesionStore.getState()
-  return usuarioActivo !== null && usuarioActivo.tipo_usuario === TIPO_ADMIN
+  return usuarioActivo !== null && esRolAdministrativo(usuarioActivo.tipo_usuario)
 }
 
 export function esInvitado(): boolean {

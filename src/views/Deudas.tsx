@@ -12,8 +12,7 @@ import {
 } from '@phosphor-icons/react'
 import { DeudaController } from '../controller/DeudaController'
 import { useSesionStore } from '../controller/SessionController'
-import type { Deuda, PagoDeuda } from '../model/types'
-import { TIPO_ADMIN } from '../model/types'
+import { esRolAdministrativo, type Deuda, type PagoDeuda } from '../model/types'
 import { moneda } from '../lib/formato'
 import { avisarError, avisarExito } from '../lib/toast'
 import { agruparPorDia, diaDeFechaActual } from '../lib/deudaHistorial'
@@ -59,7 +58,9 @@ function formatearDia(dia: string): string {
 
 /** Vista del CRM de deudas: ventas fiadas, abonos e historial por deudor. */
 export function Deudas() {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const esAdmin = useSesionStore(
+    (estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario),
+  )
   const [deudas, setDeudas] = useState<Deuda[] | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState<FiltroDeuda>('TODAS')

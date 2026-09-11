@@ -4,6 +4,9 @@
 
 export const MARGEN_FUTURO_MS = 48 * 60 * 60 * 1000
 
+/** Cuenta fija que puede ser SUPERADMIN (el dueño; única en la nube). */
+export const NOMBRE_SUPERADMIN = 'Gustavo'
+
 const FECHA_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
@@ -34,7 +37,7 @@ export function esMonto(v: unknown): boolean {
 export const ESQUEMAS: Record<string, Record<string, (v: unknown) => boolean>> = {
   usuarios: {
     nombre_usuario: (v) => esTexto(v, 50),
-    tipo_usuario: (v) => v === 'ADMIN' || v === 'REGISTRADO',
+    tipo_usuario: (v) => v === 'ADMIN' || v === 'REGISTRADO' || v === 'SUPERADMIN',
     contrasena_hash: (v) => esTexto(v, 200),
     salt: (v) => esTexto(v, 64),
     indicio_usuario: (v) => esTexto(v, 100),
@@ -129,6 +132,21 @@ export function primerCampoInvalido(tabla: string, fila: Record<string, unknown>
   }
   if (tabla === 'deudas' && (fila['saldo'] as number) > (fila['monto'] as number)) {
     return 'saldo mayor que monto'
+  }
+  if (tabla === 'usuarios') {
+    const nombre = String(fila['nombre_usuario'] ?? '').toLowerCase()
+    const esNombreDelDueno = nombre === NOMBRE_SUPERADMIN.toLowerCase()
+    if (fila['tipo_usuario'] === 'SUPERADMIN') {
+      if (!esNombreDelDueno) {
+        return `el SUPERADMIN solo puede ser la cuenta "${NOMBRE_SUPERADMIN}"`
+      }
+      if (fila['eliminado'] === true) {
+        return 'la cuenta SUPERADMIN no se puede eliminar'
+      }
+    }
+    if (esNombreDelDueno && fila['tipo_usuario'] !== 'SUPERADMIN') {
+      return `el nombre "${NOMBRE_SUPERADMIN}" pertenece a la cuenta SUPERADMIN`
+    }
   }
   return null
 }

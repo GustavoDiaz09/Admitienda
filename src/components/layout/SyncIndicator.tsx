@@ -10,7 +10,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useSesionStore } from '../../controller/SessionController'
-import { TIPO_ADMIN } from '../../model/types'
+import { esRolAdministrativo } from '../../model/types'
 import { horaCorta } from '../../lib/formato'
 import { avisarExito, avisarError } from '../../lib/toast'
 import { obtenerLlave, guardarLlave, hayLlaveConfigurada, enlaceDeLlave } from '../../lib/llave'
@@ -30,7 +30,9 @@ import { cn } from '../../lib/cn'
 
 /** Indicador de sincronización: estado de red, pendientes y acciones admin. */
 export function SyncIndicator() {
-  const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
+  const esAdmin = useSesionStore(
+    (estado) => esRolAdministrativo(estado.usuarioActivo?.tipo_usuario),
+  )
   const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
   const { enLinea, pendientes, sincronizando, ultimaSync, error, llaveInvalida } = useSyncStore()
   const [abierto, setAbierto] = useState(false)
