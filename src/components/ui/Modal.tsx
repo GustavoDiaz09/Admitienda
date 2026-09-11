@@ -58,7 +58,7 @@ export function Modal({ abierto, titulo, descripcion, onCerrar, children, ancho 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
+      className="fixed inset-0 z-[60] overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label={titulo}

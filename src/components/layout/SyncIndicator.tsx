@@ -118,7 +118,7 @@ export function SyncIndicator() {
 
       {abierto
         ? createPortal(
-            <div className="fixed inset-0 z-[60]">
+            <div className="fixed inset-0 z-50">
               <div
                 className="fixed inset-0 z-40"
                 onClick={() => setAbierto(false)}
