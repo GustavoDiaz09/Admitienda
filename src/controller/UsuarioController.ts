@@ -25,11 +25,14 @@ import {
 } from '../lib/password'
 import { textoNoVacio } from '../lib/validaciones'
 import { formatFecha } from '../lib/fecha'
-import { hayAdminRemoto } from '../lib/remoto'
+import { hayAdminRemoto, loginRemoto, type ResultadoLoginRemoto } from '../lib/remoto'
+import { guardarLlave, hayLlaveConfigurada } from '../lib/llave'
+import { supabaseDisponible } from '../lib/supabase'
 import { db } from '../lib/db'
 import { eliminarRegistro } from '../lib/mutaciones'
 import { obtenerDispositivoId } from '../sync/dispositivo'
-import { sincronizarAhora } from '../sync/syncEngine'
+import { sincronizarAhora, sincronizarBajando } from '../sync/syncEngine'
+import { sembrarUsuarioDeSesion } from '../sync/pull'
 import {
   consultarBloqueo,
   estadoBloqueo,
@@ -46,6 +49,20 @@ import {
  * inicio de sesión, registro con solicitud de permiso, recuperación por
  * indicio, aprobación de solicitudes y gestión de usuarios.
  */
+
+/** Verificación por defecto del login contra la nube (híbrido, sin llave).
+ *  Sin Supabase configurado devuelve `indisponible` para que el login local
+ *  decida; con Supabase se delega en `loginRemoto`. */
+async function intentarLoginRemoto(
+  nombre: string,
+  contrasena: string,
+): Promise<ResultadoLoginRemoto> {
+  if (!supabaseDisponible()) {
+    return { ok: false, motivo: 'indisponible' }
+  }
+  return loginRemoto(nombre, contrasena)
+}
+
 export class UsuarioController {
   private readonly usuarioDao = new UsuarioDao()
   private readonly solicitudDao = new SolicitudAdminDao()
@@ -55,10 +72,24 @@ export class UsuarioController {
     return consultarBloqueo('login', (nombreDeUsuario ?? '').trim())
   }
 
-  /** Valida las credenciales y devuelve el usuario autenticado. */
+  /**
+   * Login híbrido: primero intenta verificar las credenciales contra la nube
+   * (sin exigir llave de dispositivo). Si la nube confirma, la cuenta se
+   * siembra localmente y se devuelve el usuario; el SUPERADMIN recibe además
+   * una llave nueva de auto-enrolamiento si este dispositivo no traía una
+   * vigente (después se dispara la sync). Si la nube rechaza las credenciales
+   * o limita por fuerza bruta, el intento falla igual que en local. Si la
+   * nube no está disponible (sin configuración, sin red o error transitorio),
+   * se cae al login local, que solo puede validar cuentas ya descargadas por
+   * la sincronización. `verificarLoginRemoto` es inyectable para pruebas.
+   */
   async iniciarSesion(
     nombreDeUsuario: string,
     contrasena: string,
+    verificarLoginRemoto: (
+      nombre: string,
+      contrasena: string,
+    ) => Promise<ResultadoLoginRemoto> = intentarLoginRemoto,
   ): Promise<Usuario | null> {
     const nombreLimpio = (nombreDeUsuario ?? '').trim()
     if (nombreLimpio === '' || contrasena == null || contrasena === '') {
@@ -67,6 +98,38 @@ export class UsuarioController {
     if (consultarBloqueo('login', nombreLimpio).bloqueado) {
       return null
     }
+
+    const intento = await verificarLoginRemoto(nombreLimpio, contrasena)
+    if (intento.ok) {
+      const sembrado = await sembrarUsuarioDeSesion(intento.usuario)
+      if (intento.llave) {
+        guardarLlave(intento.llave)
+      }
+      const usuario = await this.usuarioDao.buscarPorId(sembrado.id)
+      if (!usuario) {
+        registrarFallo('login', nombreLimpio)
+        return null
+      }
+      limpiarBloqueo('login', nombreLimpio)
+      if (esHashMigrable(usuario.contrasena_hash)) {
+        const nuevoSalt = generarSalt()
+        await this.usuarioDao.actualizar({
+          ...usuario,
+          salt: nuevoSalt,
+          contrasena_hash: await hashContrasena(contrasena, nuevoSalt),
+        })
+      }
+      if (hayLlaveConfigurada()) {
+        void sincronizarAhora()
+      }
+      void sincronizarBajando()
+      return usuario
+    }
+    if (intento.motivo === 'credenciales' || intento.motivo === 'bloqueado') {
+      registrarFallo('login', nombreLimpio)
+      return null
+    }
+
     const usuario = await this.usuarioDao.buscarPorNombre(nombreLimpio)
     if (!usuario || !(await verificarContrasena(contrasena, usuario.salt, usuario.contrasena_hash))) {
       registrarFallo('login', nombreLimpio)

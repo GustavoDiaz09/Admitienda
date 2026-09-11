@@ -3,9 +3,14 @@ import { db } from '../lib/db'
 import { inicializarApp } from '../lib/inicializacion'
 import { obtenerLlave, extraerLlaveDeUrl } from '../lib/llave'
 import { UsuarioController } from '../controller/UsuarioController'
+import type { ResultadoLoginRemoto } from '../lib/remoto'
 import { ProductoController } from '../controller/ProductoController'
 import { MovimientoController } from '../controller/MovimientoController'
 import { TIPO_ADMIN, TIPO_INGRESO, TIPO_REGISTRADO } from '../model/types'
+
+/** Sin nube en los tests: el login remoto se marca como indisponible para
+ *  que el flujo caiga al login local (sin llamadas reales a la red). */
+const sinNube = async (): Promise<ResultadoLoginRemoto> => ({ ok: false, motivo: 'indisponible' })
 
 beforeEach(async () => {
   await db.delete()
@@ -69,7 +74,7 @@ describe('Arranque de la aplicación', () => {
     await controlador.registrarUsuario('admin', 'clave123', 'indicio', false, async () => false)
     await controlador.registrarUsuario('cajero', 'clave123', 'indicio', false)
 
-    const cajero = await controlador.iniciarSesion('cajero', 'clave123')
+    const cajero = await controlador.iniciarSesion('cajero', 'clave123', sinNube)
     expect(cajero?.tipo_usuario).toBe(TIPO_REGISTRADO)
   })
 
@@ -79,7 +84,7 @@ describe('Arranque de la aplicación', () => {
     await controlador.registrarUsuario('admin', 'clave123', 'indicio', false, async () => false)
     await controlador.registrarUsuario('aspirante', 'clave123', 'indicio', true)
 
-    const aspirante = await controlador.iniciarSesion('aspirante', 'clave123')
+    const aspirante = await controlador.iniciarSesion('aspirante', 'clave123', sinNube)
     expect(aspirante?.tipo_usuario).toBe(TIPO_REGISTRADO)
     expect(await db.solicitudes_admin.count()).toBe(1)
   })

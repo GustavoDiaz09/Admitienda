@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { primerCampoInvalido } from './esquemas.ts'
+import { NOMBRE_SUPERADMIN } from './esquemas.ts'
+import { verificarContrasena } from './password.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const CLAVE_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -113,10 +114,79 @@ const MAX_FILAS_DESCARGAR = 50_000
 // app para las contraseñas y que el explorador de `llaveValida`).
 const ITERACIONES_LLAVE = 210_000
 
+// ---------------------------------------------------------------------------
+// Protección contra fuerza bruta del login en la nube. Al ser híbrido, el
+// `login` verifica credenciales sin exigir llave de dispositivo; el límite se
+// aplica por nombre de usuario en memoria. El aislamiento de la Edge Function
+// reinicia el contador entre isolates (best-effort): la capa principal es el
+// backoff local de `intentos.ts`, esta es una defensa adicional directa.
+// ---------------------------------------------------------------------------
+
+const MAX_FALLOS_LOGIN = 5
+const ESPERA_INICIAL_LOGIN_MS = 30_000
+const ESPERA_MAXIMA_LOGIN_MS = 24 * 60 * 60 * 1000
+
+interface BloqueoLogin {
+  fallos: number
+  hastaMs: number
+}
+
+const intentosLogin = new Map<string, BloqueoLogin>()
+
+function bloqueoLoginDe(nombre: string): BloqueoLogin {
+  let actual = intentosLogin.get(nombre)
+  const ahora = Date.now()
+  if (!actual || actual.hastaMs < ahora) {
+    actual = { fallos: 0, hastaMs: 0 }
+    intentosLogin.set(nombre, actual)
+  }
+  return actual
+}
+
+function registrarFalloLogin(nombre: string): void {
+  const actual = bloqueoLoginDe(nombre)
+  actual.fallos++
+  if (actual.fallos >= MAX_FALLOS_LOGIN) {
+    const pasos = actual.fallos - MAX_FALLOS_LOGIN
+    const espera = Math.min(ESPERA_INICIAL_LOGIN_MS * 2 ** pasos, ESPERA_MAXIMA_LOGIN_MS)
+    actual.hastaMs = Date.now() + espera
+  }
+}
+
+function limpiarFalloLogin(nombre: string): void {
+  intentosLogin.delete(nombre)
+}
+
 function leerNombreDeCuerpo(cuerpo: unknown): string {
   if (cuerpo == null || typeof cuerpo !== 'object') return ''
   const nombre = (cuerpo as Record<string, unknown>).nombre
   return typeof nombre === 'string' ? nombre.trim() : ''
+}
+
+/**
+ * Crea una llave de sincronización nueva con nombre opcional y devuelve la
+ * llave en claro (solo se devuelve una vez; la nube guarda salt + hash).
+ * Lo usan `crear_llave` y el auto-enrolamiento del SUPERADMIN en `login`.
+ */
+async function crearLlaveEnServidor(
+  supabase: ReturnType<typeof createClient>,
+  nombre?: string,
+): Promise<string> {
+  const llaveNueva = aleatorioHex(24)
+  const salt = aleatorioHex(32)
+  const hash = await hashDeLlave(llaveNueva, salt, ITERACIONES_LLAVE)
+  const fila: Record<string, string> = {
+    llave_salt: salt,
+    llave_hash: `pbkdf2$${ITERACIONES_LLAVE}$${hash}`,
+  }
+  if (nombre) {
+    fila.nombre = nombre
+  }
+  const { error } = await supabase.from('llaves_sincronizacion').insert(fila)
+  if (error) {
+    throw new Error(error.message)
+  }
+  return llaveNueva
 }
 
 /**
@@ -154,22 +224,96 @@ async function manejarCrearLlave(
     }
   }
 
-  const llaveNueva = aleatorioHex(24)
-  const salt = aleatorioHex(32)
-  const hash = await hashDeLlave(llaveNueva, salt, ITERACIONES_LLAVE)
-  const fila: Record<string, string> = {
-    llave_salt: salt,
-    llave_hash: `pbkdf2$${ITERACIONES_LLAVE}$${hash}`,
-  }
-  if (nombre) {
-    fila.nombre = nombre
-  }
-  const { error: errorInsertar } = await supabase.from('llaves_sincronizacion').insert(fila)
-  if (errorInsertar) {
-    console.error('crear_llave:', errorInsertar.message)
+  try {
+    const llaveNueva = await crearLlaveEnServidor(supabase, nombre)
+    return jsonDatos(200, { llave: llaveNueva, inicial: totalLlaves === 0 })
+  } catch (error) {
+    console.error('crear_llave:', error instanceof Error ? error.message : String(error))
     return jsonDatos(500, { error: 'No se pudo crear la llave de sincronización.' })
   }
-  return jsonDatos(200, { llave: llaveNueva, inicial: totalLlaves === 0 })
+}
+
+/**
+ * Login híbrido: verifica las credenciales contra la nube (sin exigir llave
+ * de dispositivo) y devuelve la fila del usuario para sembrarla localmente.
+ * Cuando es la cuenta del dueño (SUPERADMIN) y el dispositivo no trae una
+ * llave válida, se auto-enrola una llave nueva (se devuelve una sola vez);
+ * cualquier otro usuario puede entrar sin llave y la obtiene después desde
+ * una sesión ya iniciada (flujo de distribución del dueño). Ante
+ * credenciales incorrectas se responde 400 `credencialesIncorrectas:true`
+ * (mensaje único, sin enumerar usuarios) y se aplica el límite de fuerza
+ * bruta; un 429 indica esperar antes de reintentar.
+ */
+async function manejarLogin(
+  supabase: ReturnType<typeof createClient>,
+  req: Request,
+): Promise<Response> {
+  let cuerpo: { nombre_usuario?: unknown; contrasena?: unknown }
+  try {
+    cuerpo = (await req.json()) as { nombre_usuario?: unknown; contrasena?: unknown }
+  } catch {
+    return jsonDatos(400, { credencialesIncorrectas: true })
+  }
+  const nombre = typeof cuerpo?.nombre_usuario === 'string' ? cuerpo.nombre_usuario.trim() : ''
+  const contrasena = typeof cuerpo?.contrasena === 'string' ? cuerpo.contrasena : ''
+  if (!nombre || !contrasena) {
+    return jsonDatos(400, { credencialesIncorrectas: true })
+  }
+
+  const bloqueo = bloqueoLoginDe(nombre.toLowerCase())
+  const esperaRestanteMs = bloqueo.hastaMs - Date.now()
+  if (esperaRestanteMs > 0) {
+    return jsonDatos(429, {
+      error: 'Demasiados intentos fallidos. Intente de nuevo más tarde.',
+      esperaMs: esperaRestanteMs,
+    })
+  }
+
+  const { data: usuario, error } = await supabase
+    .from('usuarios')
+    .select('*')
+    .ilike('nombre_usuario', nombre)
+    .limit(1)
+  if (error) {
+    console.error('login:', error.message)
+    return jsonDatos(500, { error: 'No se pudo verificar el inicio de sesión.' })
+  }
+  const fila = (usuario ?? [])[0] as Record<string, unknown> | undefined
+  const credencialesValidas = !!fila && (await verificarContrasena(
+    contrasena,
+    String(fila.salt ?? ''),
+    String(fila.contrasena_hash ?? ''),
+  ))
+  if (!fila || !credencialesValidas) {
+    registrarFalloLogin(nombre.toLowerCase())
+    return jsonDatos(400, { credencialesIncorrectas: true })
+  }
+  limpiarFalloLogin(nombre.toLowerCase())
+
+  let llaveNueva: string | undefined
+  const llaveRecibida = req.headers.get('x-llave-sincronizacion') ?? ''
+  const trajoLlaveValida = llaveRecibida !== '' && (await llaveValida(supabase, llaveRecibida))
+  const esSuperadmin =
+    String(fila.tipo_usuario ?? '') === 'SUPERADMIN' &&
+    String(fila.nombre_usuario ?? '') === NOMBRE_SUPERADMIN
+  if (esSuperadmin && !trajoLlaveValida) {
+    try {
+      llaveNueva = await crearLlaveEnServidor(supabase, 'Auto-enrolamiento (SUPERADMIN)')
+    } catch (errorError) {
+      console.error(
+        'login auto-enrolamiento:',
+        errorError instanceof Error ? errorError.message : String(errorError),
+      )
+      // El login ya es válido: sin llave no se auto-enrola, pero no se
+      // rechaza la sesión; el dispositivo podrá configurar la llave después.
+    }
+  }
+
+  return jsonDatos(200, {
+    ok: true,
+    usuario: fila,
+    ...(llaveNueva !== undefined ? { llave: llaveNueva } : {}),
+  })
 }
 
 Deno.serve(async (req) => {
@@ -186,6 +330,10 @@ Deno.serve(async (req) => {
 
     if (accion === 'crear_llave') {
       return manejarCrearLlave(supabase, req)
+    }
+
+    if (accion === 'login') {
+      return manejarLogin(supabase, req)
     }
 
     const llave = req.headers.get('x-llave-sincronizacion') ?? ''

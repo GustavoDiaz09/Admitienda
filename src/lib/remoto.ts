@@ -135,6 +135,59 @@ export async function subirRemoto(tabla: TablaSync, filas: unknown[]): Promise<v
   await llamar('subir', { tabla, filas })
 }
 
+/**
+ * Resultado del login verificado en la nube:
+ * - `ok:true` → credenciales válidas; `usuario` es la fila (snake_case) para
+ *   sembrar localmente y `llave` viene solo cuando la nube emitó una nueva
+ *   (auto-enrolamiento del SUPERADMIN en un dispositivo sin llave vigente).
+ * - `ok:false` → `credenciales` (rechazo definitivo), `bloqueado` (esperar,
+ *   limite de fuerza bruta del servidor) o `indisponible` (red/error
+ *   transitorio: corresponde probar el login local).
+ */
+export type ResultadoLoginRemoto =
+  | { ok: true; usuario: Record<string, unknown>; llave?: string }
+  | { ok: false; motivo: 'credenciales' | 'bloqueado' | 'indisponible' }
+
+/**
+ * Login híbrido: verifica las credenciales contra la nube sin exigir llave de
+ * dispositivo (la cabecera se envía solo si este dispositivo ya tiene una,
+ * para que el SUPERADMIN con llave vigente no reciba otra). Devuelve el
+ * usuario (y la llave nueva del auto-enrolamiento del dueño, si procede) o un
+ * motivo de rechazo/indisponibilidad.
+ */
+export async function loginRemoto(
+  nombre: string,
+  contrasena: string,
+): Promise<ResultadoLoginRemoto> {
+  let datos: unknown = null
+  try {
+    datos = await llamar('login', { nombre_usuario: nombre, contrasena }, undefined, false)
+  } catch (error) {
+    if (error instanceof ErrorRemoto && error.estado === 400) {
+      return { ok: false, motivo: 'credenciales' }
+    }
+    if (error instanceof ErrorRemoto && error.estado === 429) {
+      return { ok: false, motivo: 'bloqueado' }
+    }
+    return { ok: false, motivo: 'indisponible' }
+  }
+  if (
+    datos != null &&
+    typeof datos === 'object' &&
+    (datos as { ok?: unknown }).ok === true &&
+    (datos as { usuario?: unknown }).usuario != null &&
+    typeof (datos as { usuario?: unknown }).usuario === 'object'
+  ) {
+    const llave = (datos as { llave?: unknown }).llave
+    return {
+      ok: true,
+      usuario: (datos as { usuario: Record<string, unknown> }).usuario,
+      ...(typeof llave === 'string' && llave.trim() !== '' ? { llave } : {}),
+    }
+  }
+  return { ok: false, motivo: 'credenciales' }
+}
+
 export interface LlaveNuevaRemota {
   llave: string
   /** `true` si fue la primera llave creada (arranque de la tienda en la nube). */

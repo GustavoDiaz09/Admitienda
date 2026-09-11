@@ -4,7 +4,7 @@ import { descargarRemoto, subirRemoto } from '../lib/remoto'
 import { db } from '../lib/db'
 import { useSyncStore, refrescarPendientes, sincronizarAhora } from './syncEngine'
 import { contarPendientes, idOutbox } from './outbox'
-import type { RegistroBase, TablaSync } from '../model/types'
+import type { RegistroBase, TablaSync, Usuario } from '../model/types'
 
 export const TABLAS: TablaSync[] = [
   'usuarios',
@@ -86,7 +86,7 @@ export async function programarProximaDescargaCompleta(marcaTiempo: number): Pro
 }
 
 /** Convierte una fila de la nube (nombres con guion bajo) a registro local. */
-function filaLocal(fila: Record<string, unknown>): RegistroBase {
+export function filaLocal(fila: Record<string, unknown>): RegistroBase {
   const base = {
     id: String(fila.id),
     creadoEn: Number(fila.creado_en ?? 0),
@@ -123,6 +123,40 @@ function tablaDexie(tabla: TablaSync) {
     case 'pagos_deuda':
       return db.pagos_deuda
   }
+}
+
+/**
+ * Aplica de forma autoritativa la fila del usuario confirmada por la nube en
+ * el login híbrido. Como el servidor acaba de verificar las credenciales del
+ * propio usuario, la fila remota es la fuente de verdad: cualquier copia
+ * local con el mismo `nombre_usuario` pero id distinto (fantasma de una
+ * siembra/registro previo) se descarta físicamente de este dispositivo junto
+ * con su entrada del outbox (solo local: jamás subiría por el índice único),
+ * igual que la resolución LWW de `aplicarRemotos`. Devuelve el usuario local.
+ */
+export async function sembrarUsuarioDeSesion(fila: Record<string, unknown>): Promise<Usuario> {
+  const usuario = filaLocal(fila) as unknown as Usuario
+  try {
+    await db.usuarios.put(usuario)
+  } catch {
+    const ocupante = await db.usuarios
+      .where('nombre_usuario')
+      .equals(usuario.nombre_usuario)
+      .first()
+    if (ocupante && ocupante.id !== usuario.id) {
+      try {
+        await db.usuarios.delete(ocupante.id)
+        await db.outbox.delete(idOutbox('usuarios', ocupante.id))
+      } catch {
+        // La remoción del fantasma es best-effort; el `put` siguiente decide.
+      }
+    } else {
+      throw new Error('No se pudo guardar la cuenta localmente.')
+    }
+    await db.usuarios.put(usuario)
+  }
+  await db.outbox.delete(idOutbox('usuarios', usuario.id))
+  return usuario
 }
 
 /**

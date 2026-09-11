@@ -2,6 +2,7 @@
 import { db } from '../lib/db'
 import { inicializarApp } from '../lib/inicializacion'
 import { UsuarioController } from '../controller/UsuarioController'
+import type { ResultadoLoginRemoto } from '../lib/remoto'
 import {
   estadoBloqueo,
   registrarFalloDeIndicio,
@@ -14,6 +15,10 @@ import {
   ESPERA_MAXIMA_MS,
   type EstadoBloqueo,
 } from '../lib/intentos'
+
+/** Sin nube en los tests: el login remoto se marca como indisponible para
+ *  que el flujo caiga al login local (sin llamadas reales a la red). */
+const sinNube = async (): Promise<ResultadoLoginRemoto> => ({ ok: false, motivo: 'indisponible' })
 
 beforeEach(async () => {
   window.localStorage.clear()
@@ -152,7 +157,7 @@ describe('Backoff del inicio de sesiÃ³n', () => {
     await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
-      expect(await controlador.iniciarSesion('julieta', 'equivocada')).toBeNull()
+      expect(await controlador.iniciarSesion('julieta', 'equivocada', sinNube)).toBeNull()
     }
     expect((await controlador.consultarBloqueoDeLogin('julieta')).bloqueado).toBe(true)
   })
@@ -163,10 +168,10 @@ describe('Backoff del inicio de sesiÃ³n', () => {
     await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
     for (let i = 0; i < MAX_INTENTOS_FALLIDOS; i++) {
-      await controlador.iniciarSesion('julieta', 'equivocada')
+      await controlador.iniciarSesion('julieta', 'equivocada', sinNube)
     }
     const antes = (await controlador.consultarBloqueoDeLogin('julieta')).fallos
-    expect(await controlador.iniciarSesion('julieta', 'clave123')).toBeNull()
+    expect(await controlador.iniciarSesion('julieta', 'clave123', sinNube)).toBeNull()
     const despues = (await controlador.consultarBloqueoDeLogin('julieta'))
     expect(despues.bloqueado).toBe(true)
     expect(despues.fallos).toBe(antes)
@@ -177,11 +182,11 @@ describe('Backoff del inicio de sesiÃ³n', () => {
     const controlador = new UsuarioController()
     await controlador.registrarUsuario('julieta', 'clave123', 'mi perro', false, async () => false)
 
-    await controlador.iniciarSesion('julieta', 'equivocada')
-    await controlador.iniciarSesion('julieta', 'equivocada')
+    await controlador.iniciarSesion('julieta', 'equivocada', sinNube)
+    await controlador.iniciarSesion('julieta', 'equivocada', sinNube)
     expect((await controlador.consultarBloqueoDeLogin('julieta')).fallos).toBe(2)
 
-    expect(await controlador.iniciarSesion('julieta', 'clave123')).not.toBeNull()
+    expect(await controlador.iniciarSesion('julieta', 'clave123', sinNube)).not.toBeNull()
     const estado = await controlador.consultarBloqueoDeLogin('julieta')
     expect(estado.bloqueado).toBe(false)
     expect(estado.fallos).toBe(0)
