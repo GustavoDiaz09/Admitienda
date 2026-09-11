@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { NOMBRE_SUPERADMIN } from './esquemas.ts'
+import { NOMBRE_SUPERADMIN, primerCampoInvalido } from './esquemas.ts'
 import { verificarContrasena } from './password.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
