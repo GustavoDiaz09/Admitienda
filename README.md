@@ -71,7 +71,7 @@ sistematienda-web/
 │   ├── App.tsx          Rutas, guards y arranque de la app
 │   └── test/            Pruebas Vitest
 ├── supabase/
-│   ├── migracion.sql    Esquema remoto (6 tablas espejo + llaves + RLS)
+│   ├── migracion.sql    Esquema remoto (7 tablas espejo + llaves + RLS)
 │   └── functions/sync/  Edge Function: puerta única a la nube (una por llave)
 ├── public/              favicon, iconos PWA (SVG + PNG)
 └── vite.config.ts       Vite + Tailwind v4 + vite-plugin-pwa
@@ -103,7 +103,7 @@ sistematienda-web/
 1. Crea un proyecto en Supabase y copia la URL a `.env`
    (`VITE_SUPABASE_URL`). No se usa la clave anon: los datos solo se tocan con
    la llave de sincronización por dispositivo.
-2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 6 tablas
+2. Ejecuta `supabase/migracion.sql` en el SQL Editor (crea las 7 tablas
    espejo, `llaves_sincronizacion` y revoca el acceso de anon/authenticated).
 3. Despliega la Edge Function `sync` (código en `supabase/functions/sync/`) y
    deja `verify_jwt` desactivado: la autenticación la hace la propia llave.

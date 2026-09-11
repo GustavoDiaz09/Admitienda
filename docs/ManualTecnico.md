@@ -142,7 +142,7 @@ Reglas de negocio de integridad:
   Un lote inválido responde **400** con el id de la fila y el campo; uno que
   excede límites responde **413**; una violación de unicidad sigue en **409**.
   Nada basura puede entrar a la fuente compartida que cada dispositivo fusiona.
-- **Esquema remoto:** `supabase/migracion.sql` crea las 6 tablas espejo
+- **Esquema remoto:** `supabase/migracion.sql` crea las 7 tablas espejo
   (PK `id uuid`, blanco del `onConflict`) y `llaves_sincronizacion`. El acceso
   de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
   de modo que aun filtrándose la clave pública del proyecto nadie puede leer

@@ -1,5 +1,5 @@
 -- Migración de Sistema Tienda Web para Supabase (SQL Editor)
--- Crea las 6 tablas espejo usadas por la sincronización offline-first y la
+-- Crea las 7 tablas espejo usadas por la sincronización offline-first y la
 -- tabla de llaves de sincronización. Ejecutar en el SQL Editor del proyecto.
 --
 -- ACCESO: la app NO usa la clave anon para los datos. Toda lectura/escritura
@@ -86,6 +86,7 @@ create table if not exists public.deudas (
   saldo double precision not null default 0,
   descripcion text,
   fecha text not null,
+  deudor_id uuid not null,
   creado_en bigint not null default 0,
   actualizado_en bigint not null default 0,
   version integer not null default 1,
@@ -108,6 +109,56 @@ create table if not exists public.pagos_deuda (
   eliminado boolean not null default false,
   dispositivo text not null default ''
 );
+
+-- ============================================================
+-- deudores (maestro de clientes fiados: un deudor único por nombre,
+-- insensible a mayúsculas/espacios vía nombre_normalizado)
+-- ============================================================
+create table if not exists public.deudores (
+  id uuid primary key default gen_random_uuid(),
+  nombre_deudor text not null,
+  nombre_normalizado text not null,
+  creado_en bigint not null default 0,
+  actualizado_en bigint not null default 0,
+  version integer not null default 1,
+  eliminado boolean not null default false,
+  dispositivo text not null default ''
+);
+
+-- `deudor_id` en deudas NO está en el create si la tabla ya existía de una
+-- versión previa del script; se añade, se hace backfill y se fija NOT NULL.
+alter table public.deudas add column if not exists deudor_id uuid;
+
+-- Backfill idempotente: si quedaron deudas huérfanas (base migrada desde el
+-- esquema de 6 tablas), se crea un deudor por nombre normalizado y se enlaza.
+insert into public.deudores (id, nombre_deudor, nombre_normalizado, creado_en, actualizado_en, version, eliminado, dispositivo)
+select gen_random_uuid(),
+  hu.nombre_deudor,
+  hu.nombre_normalizado,
+  hu.creado_en,
+  hu.actualizado_en,
+  1,
+  false,
+  ''
+from (
+  select distinct on (lower(cliente_nombre))
+    cliente_nombre as nombre_deudor,
+    lower(cliente_nombre) as nombre_normalizado,
+    creado_en,
+    actualizado_en
+  from public.deudas
+  where cliente_nombre is not null and cliente_nombre <> ''
+    and deudor_id is null
+  order by lower(cliente_nombre), creado_en, id
+) hu;
+
+update public.deudas d
+set deudor_id = deu.id
+from public.deudores deu
+where d.deudor_id is null
+  and lower(d.cliente_nombre) = deu.nombre_normalizado;
+
+alter table public.deudas alter column deudor_id set not null;
 
 -- ============================================================
 -- llaves_sincronizacion (llave única por dispositivo que valida la Edge
@@ -136,7 +187,13 @@ create unique index if not exists uq_usuarios_nombre on public.usuarios (lower(n
 -- índice no único de respaldo en caso de que la migración se interrumpa.
 create index if not exists idx_solicitudes_usuario on public.solicitudes_admin (usuario_id);
 create index if not exists idx_deudas_cliente on public.deudas (cliente_nombre);
+create index if not exists idx_deudas_deudor on public.deudas (deudor_id);
 create index if not exists idx_pagos_deuda on public.pagos_deuda (deuda_id);
+-- Deudor único por nombre sin distinción de mayúsculas (regla de negocio:
+-- "no varias al mismo nombre"). Si la tabla se creó antes con duplicados,
+-- esta instrucción falla y hay que limpiarlos primero.
+create unique index if not exists uq_deudores_nombre on public.deudores (lower(nombre_deudor));
+create index if not exists idx_deudores_normalizado on public.deudores (nombre_normalizado);
 
 -- ============================================================
 -- Seguridad
@@ -145,6 +202,7 @@ alter table public.usuarios enable row level security;
 alter table public.productos enable row level security;
 alter table public.movimientos enable row level security;
 alter table public.solicitudes_admin enable row level security;
+alter table public.deudores enable row level security;
 alter table public.deudas enable row level security;
 alter table public.pagos_deuda enable row level security;
 alter table public.llaves_sincronizacion enable row level security;
@@ -164,6 +222,9 @@ drop policy if exists "movimientos_actualizacion" on public.movimientos;
 drop policy if exists "solicitudes_lectura" on public.solicitudes_admin;
 drop policy if exists "solicitudes_escritura" on public.solicitudes_admin;
 drop policy if exists "solicitudes_actualizacion" on public.solicitudes_admin;
+drop policy if exists "deudores_lectura" on public.deudores;
+drop policy if exists "deudores_escritura" on public.deudores;
+drop policy if exists "deudores_actualizacion" on public.deudores;
 drop policy if exists "deudas_lectura" on public.deudas;
 drop policy if exists "deudas_escritura" on public.deudas;
 drop policy if exists "deudas_actualizacion" on public.deudas;
@@ -173,7 +234,7 @@ drop policy if exists "pagos_actualizacion" on public.pagos_deuda;
 
 -- La clave anon/authenticated no tiene permisos sobre los datos.
 revoke all on public.usuarios, public.productos, public.movimientos,
-  public.solicitudes_admin, public.deudas, public.pagos_deuda,
+  public.solicitudes_admin, public.deudores, public.deudas, public.pagos_deuda,
   public.llaves_sincronizacion from anon, authenticated;
 
 -- Nota: la clave primaria de cada tabla (id uuid) es la referencia de
