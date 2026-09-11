@@ -8,6 +8,7 @@ import { AuthShell } from '../components/auth/AuthShell'
 import { FormAuthHeader } from '../components/auth/FormAuthHeader'
 import { Button } from '../components/ui/Button'
 import { Campo, Entrada } from '../components/ui/Campo'
+import { PanelLlaveSincronizacion } from '../components/sync/PanelLlaveSincronizacion'
 import { avisarExito } from '../lib/toast'
 import { formatearEspera, type EstadoBloqueo } from '../lib/intentos'
 
@@ -22,6 +23,7 @@ export function Login() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bloqueo, setBloqueo] = useState<EstadoBloqueo | null>(null)
+  const [llaveAbierta, setLlaveAbierta] = useState(false)
 
   useEffect(() => {
     let vigente = true
@@ -130,6 +132,24 @@ export function Login() {
         <Button variante="fantasma" onClick={entrarInvitado} className="w-full">
           Entrar como invitado
         </Button>
+      </div>
+      <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+        <button
+          type="button"
+          onClick={() => setLlaveAbierta(!llaveAbierta)}
+          aria-expanded={llaveAbierta}
+          className="flex w-full items-center justify-between text-left text-sm font-semibold text-zinc-700"
+        >
+          <span>Configurar la sincronización de este dispositivo</span>
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-zinc-200 text-zinc-600">
+            {llaveAbierta ? '−' : '+'}
+          </span>
+        </button>
+        {llaveAbierta ? (
+          <div className="mt-3 space-y-3">
+            <PanelLlaveSincronizacion />
+          </div>
+        ) : null}
       </div>
     </AuthShell>
   )

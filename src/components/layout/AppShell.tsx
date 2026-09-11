@@ -17,7 +17,7 @@ import {
 import { useSesionStore } from '../../controller/SessionController'
 import { UsuarioController } from '../../controller/UsuarioController'
 import { UsuarioDao } from '../../dao/UsuarioDao'
-import { esRolAdministrativo, TIPO_REGISTRADO, TIPO_SUPERADMIN } from '../../model/types'
+import { esRolAdministrativo, esNombreSuperadmin, TIPO_REGISTRADO, TIPO_SUPERADMIN } from '../../model/types'
 import { actualizarConteoAlertas, useAlertasStore } from '../../lib/conteoAlertas'
 import { avisarError, avisarExito } from '../../lib/toast'
 import { cn } from '../../lib/cn'
@@ -250,7 +250,7 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-2">
             <SyncIndicator />
 
-            {esRegistrado ? (
+            {esRegistrado && !esNombreSuperadmin(usuarioActivo?.nombre_usuario) ? (
               <Button variante="secundario" tamanio="sm" icono={ShieldCheck} onClick={solicitarPermiso}>
                 <span className="hidden md:inline">Solicitar permiso de administrador</span>
                 <span className="md:hidden">Solicitar permiso</span>

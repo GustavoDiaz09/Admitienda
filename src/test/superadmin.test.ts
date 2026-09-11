@@ -181,3 +181,36 @@ describe('Eliminación con SUPERADMIN presente', () => {
     void dueno
   })
 })
+
+describe('Nombre reservado en la solicitud de permisos', () => {
+  it('un "Gustavo" REGISTRADO fantasma no puede solicitar permiso de administrador', async () => {
+    await inicializarApp()
+    const ahora = Date.now()
+    await db.usuarios.add({
+      id: crypto.randomUUID(),
+      nombre_usuario: 'Gustavo',
+      tipo_usuario: TIPO_REGISTRADO,
+      contrasena_hash: 'hash',
+      salt: 'salt',
+      indicio_usuario: 'indicio',
+      fecha_registro: '2026-01-01 10:00',
+      creadoEn: ahora,
+      actualizadoEn: ahora,
+      version: 1,
+      eliminado: false,
+      dispositivo: 'test-fantasma',
+    })
+    const fantasma = (await new UsuarioController().obtenerUsuarios()).find(
+      (u) => u.nombre_usuario.toLowerCase() === 'gustavo',
+    )
+    if (!fantasma) {
+      throw new Error('No se pudo sembrar la copia fantasma.')
+    }
+
+    const resultado = await new UsuarioController().solicitarPermisoAdministrador(fantasma.id)
+
+    expect(resultado.exito).toBe(false)
+    expect(resultado.mensaje).toContain('SUPERADMIN')
+    expect(await db.solicitudes_admin.count()).toBe(0)
+  })
+})

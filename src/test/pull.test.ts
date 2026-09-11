@@ -10,7 +10,7 @@ import {
 } from '../sync/pull'
 import { idOutbox } from '../sync/outbox'
 import { descargarRemoto } from '../lib/remoto'
-import type { Producto, RegistroBase } from '../model/types'
+import type { Producto, RegistroBase, TipoUsuario } from '../model/types'
 
 vi.mock('../lib/supabase', () => ({
   supabaseUrl: 'https://proyecto.supabase.co',
@@ -253,5 +253,132 @@ describe('Cursor de descarga derivado del reloj del servidor', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('Conflicto de unicidad local (mismo nombre, ids distintos)', () => {
+  function filaRemotaUsuario(
+    id: string,
+    nombre: string,
+    tipo: TipoUsuario,
+    actualizadoEn: number,
+    version: number,
+  ): Record<string, unknown> {
+    return {
+      id,
+      creado_en: 1,
+      actualizado_en: actualizadoEn,
+      version,
+      eliminado: false,
+      dispositivo: 'nube',
+      nombre_usuario: nombre,
+      tipo_usuario: tipo,
+      contrasena_hash: 'hash',
+      salt: 'salt',
+      indicio_usuario: 'indicio',
+      fecha_registro: '2026-01-01 10:00',
+    }
+  }
+
+  async function sembrarUsuarioLocal(
+    id: string,
+    nombre: string,
+    tipo: TipoUsuario,
+    actualizadoEn: number,
+    version: number,
+  ): Promise<void> {
+    const registro = {
+      id,
+      nombre_usuario: nombre,
+      tipo_usuario: tipo,
+      contrasena_hash: 'hash',
+      salt: 'salt',
+      indicio_usuario: 'indicio',
+      fecha_registro: '2026-01-01 10:00',
+      creadoEn: 1,
+      actualizadoEn,
+      version,
+      eliminado: false,
+      dispositivo: 'local',
+    }
+    await db.usuarios.put(registro)
+    await db.outbox.put({
+      id: idOutbox('usuarios', id),
+      tabla: 'usuarios',
+      registro: { ...registro },
+      encoladoEn: 1,
+      intentos: 0,
+    })
+  }
+
+  it('el SUPERADMIN remoto más reciente reemplaza a un "Gustavo" local fantasma y limpia su cola', async () => {
+    await sembrarUsuarioLocal('fantasma-local', 'Gustavo', 'REGISTRADO', 100, 1)
+
+    const resultado = await aplicarRemotos('usuarios', [
+      filaRemotaUsuario('dueno-nube', 'Gustavo', 'SUPERADMIN', 200, 4),
+    ])
+
+    expect(resultado.conflictos).toBe(0)
+    expect(resultado.actualizados).toBe(1)
+    const aplicado = await db.usuarios.get('dueno-nube')
+    expect(aplicado?.nombre_usuario).toBe('Gustavo')
+    expect(aplicado?.tipo_usuario).toBe('SUPERADMIN')
+    expect(await db.usuarios.get('fantasma-local')).toBeUndefined()
+    expect(await db.outbox.get(idOutbox('usuarios', 'fantasma-local'))).toBeUndefined()
+  })
+
+  it('conserva al ocupante local cuando es la versión más reciente', async () => {
+    await sembrarUsuarioLocal('fantasma-local', 'Gustavo', 'REGISTRADO', 300, 2)
+
+    const resultado = await aplicarRemotos('usuarios', [
+      filaRemotaUsuario('dueno-nube', 'Gustavo', 'SUPERADMIN', 200, 4),
+    ])
+
+    expect(resultado.conflictos).toBe(1)
+    expect(resultado.actualizados).toBe(0)
+    expect(await db.usuarios.get('fantasma-local')).toBeDefined()
+    expect(await db.outbox.get(idOutbox('usuarios', 'fantasma-local'))).toBeDefined()
+    expect(await db.usuarios.get('dueno-nube')).toBeUndefined()
+  })
+
+  it('resuelve el mismo choque para deudores por nombre normalizado', async () => {
+    const deudorRemoto = {
+      id: 'deudor-nube',
+      creado_en: 1,
+      actualizado_en: 200,
+      version: 2,
+      eliminado: false,
+      dispositivo: 'nube',
+      nombre_deudor: 'María López',
+      nombre_normalizado: 'maria lopez',
+    }
+    await db.deudores.put({
+      id: 'deudor-fantasma',
+      nombre_deudor: 'Maria Lopez',
+      nombre_normalizado: 'maria lopez',
+      creadoEn: 1,
+      actualizadoEn: 100,
+      version: 1,
+      eliminado: false,
+      dispositivo: 'local',
+    })
+    await db.outbox.put({
+      id: idOutbox('deudores', 'deudor-fantasma'),
+      tabla: 'deudores',
+      registro: {
+        id: 'deudor-fantasma',
+        nombre_deudor: 'Maria Lopez',
+        nombre_normalizado: 'maria lopez',
+      } as never,
+      encoladoEn: 1,
+      intentos: 0,
+    })
+
+    const resultado = await aplicarRemotos('deudores', [deudorRemoto])
+
+    expect(resultado.conflictos).toBe(0)
+    expect(await db.deudores.get('deudor-nube')).toBeDefined()
+    expect(await db.deudores.get('deudor-fantasma')).toBeUndefined()
+    expect(await db.outbox.get(idOutbox('deudores', 'deudor-fantasma'))).toBeUndefined()
   })
 })

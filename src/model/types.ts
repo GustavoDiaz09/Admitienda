@@ -58,6 +58,12 @@ export function esSuperadmin(tipo: TipoUsuario | null | undefined): boolean {
   return tipo === TIPO_SUPERADMIN
 }
 
+/** Indica si el nombre corresponde a la cuenta fija del dueño (SUPERADMIN),
+ *  reservada en el registro y en la promoción de permisos. */
+export function esNombreSuperadmin(nombre: string | null | undefined): boolean {
+  return (nombre ?? '').trim().toLowerCase() === NOMBRE_SUPERADMIN.toLowerCase()
+}
+
 /** Usuario del sistema (autenticación local con hash SHA-256 + salt). */
 export interface Usuario extends RegistroBase {
   nombre_usuario: string

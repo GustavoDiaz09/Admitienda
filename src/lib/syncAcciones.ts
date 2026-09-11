@@ -1,12 +1,33 @@
 import { respaldarTodoEnServidor, traerDatosDelServidor } from '../sync/pull'
-import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../sync/syncEngine'
-import { obtenerLlave } from './llave'
+import {
+  refrescarPendientes,
+  sincronizarAhora,
+  sincronizarBajando,
+  useSyncStore,
+} from '../sync/syncEngine'
+import { obtenerLlave, guardarLlave } from './llave'
 import { avisarError, avisarExito, avisarInfo } from './toast'
 
 /** Acciones de sincronización disponibles para un administrador. */
 export type TipoAccionSync = 'sincronizar' | 'subir' | 'bajar'
 
 const EVENTO_DATOS = 'datos:sincronizados'
+
+/**
+ * Guarda la llave de sincronización escrita por el usuario y arranca la
+ * sincronización completa de este dispositivo: sube los pendientes y dispara
+ * la bajada (la primera vez es completa porque el cursor empieza en cero), de
+ * modo que en un dispositivo nuevo los usuarios de la nube (p. ej. la cuenta
+ * SUPERADMIN del dueño) quedan disponibles antes de iniciar sesión. Útil tanto
+ * en el panel dentro de la app como en la pantalla de Login sin sesión.
+ */
+export async function configurarLlaveYSincronizar(llave: string): Promise<void> {
+  guardarLlave(llave)
+  avisarExito('Llave de sincronización guardada.')
+  await sincronizarAhora()
+  await sincronizarBajando()
+  await refrescarPendientes()
+}
 
 /**
  * Ejecuta una acción de sincronización y notifica el resultado por toast.

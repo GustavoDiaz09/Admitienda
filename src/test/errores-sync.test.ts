@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '../lib/db'
-import { guardarLlave } from '../lib/llave'
+import { guardarLlave, obtenerLlave } from '../lib/llave'
 import { ErrorRemoto, subirRemoto, verificarRemoto, descargarRemoto } from '../lib/remoto'
 import { useToastStore } from '../lib/toast'
+import { configurarLlaveYSincronizar } from '../lib/syncAcciones'
 import { encolar, contarPendientes } from '../sync/outbox'
 import {
   sincronizarAhora,
@@ -135,5 +136,12 @@ describe('Errores de sincronización visibles', () => {
 
     expect(useSyncStore.getState().llaveInvalida).toBe(true)
     expect(useSyncStore.getState().error).toContain('no es válida')
+  })
+
+  it('configurarLlaveYSincronizar guarda la llave y dispara la bajada', async () => {
+    await configurarLlaveYSincronizar('llave-nueva')
+
+    expect(obtenerLlave()).toBe('llave-nueva')
+    expect(vi.mocked(descargarRemoto)).toHaveBeenCalled()
   })
 })

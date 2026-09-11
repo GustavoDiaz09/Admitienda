@@ -1,6 +1,12 @@
 import { db } from '../lib/db'
 import { nuevoRegistro, actualizarRegistro, eliminarRegistro, type ContextoEscritura } from '../lib/mutaciones'
-import { NOMBRE_SUPERADMIN, TIPO_ADMIN, TIPO_SUPERADMIN, type RegistroBase, type Usuario } from '../model/types'
+import {
+  esNombreSuperadmin,
+  TIPO_ADMIN,
+  TIPO_SUPERADMIN,
+  type RegistroBase,
+  type Usuario,
+} from '../model/types'
 
 /**
  * Acceso a datos de usuarios (port de `tienda.dao.UserDao`). La
@@ -66,7 +72,7 @@ export class UsuarioDao {
 
   /** `true` si el nombre corresponde a la cuenta fija del dueño (SUPERADMIN). */
   esCuentaSuperadmin(nombreDeUsuario: string): boolean {
-    return (nombreDeUsuario ?? '').trim().toLowerCase() === NOMBRE_SUPERADMIN.toLowerCase()
+    return esNombreSuperadmin(nombreDeUsuario)
   }
 
   /** Indica si algún usuario (activo o no) ocupa ese nombre. */

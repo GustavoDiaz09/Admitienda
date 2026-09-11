@@ -1,5 +1,6 @@
 import type { SolicitudAdmin, TipoUsuario, Usuario } from '../model/types'
 import {
+  esNombreSuperadmin,
   esRolAdministrativo,
   esSuperadmin,
   NOMBRE_SUPERADMIN,
@@ -275,6 +276,9 @@ export class UsuarioController {
     const usuario = await this.usuarioDao.buscarPorId(idDeUsuario)
     if (!usuario) {
       return Resultado.error('El usuario no existe.')
+    }
+    if (esNombreSuperadmin(usuario.nombre_usuario)) {
+      return Resultado.error('Esa cuenta corresponde al SUPERADMIN y no requiere solicitar permiso.')
     }
     if (esRolAdministrativo(usuario.tipo_usuario)) {
       return Resultado.error('Ese usuario ya tiene permisos de administración.')

@@ -1,3 +1,4 @@
+import type { Table } from 'dexie'
 import { supabaseDisponible } from '../lib/supabase'
 import { descargarRemoto, subirRemoto } from '../lib/remoto'
 import { db } from '../lib/db'
@@ -31,6 +32,16 @@ const CLAVE_RESCAN = 'proxima_descarga_completa'
 
 /** Tamaño de lote para descargas y para subir la base completa. */
 const TAMANO_LOTE = 1000
+
+/**
+ * Columna con índice único (además del id) de cada tabla. Si una fila remota
+ * choca con otra local al aplicarla (mismo nombre de usuario o deudor, id
+ * distinto), se resuelve con LWW comparando contra el ocupante local.
+ */
+const CLAVE_UNICA: Partial<Record<TablaSync, string>> = {
+  usuarios: 'nombre_usuario',
+  deudores: 'nombre_normalizado',
+}
 
 /**
  * Margen de seguridad del cursor incremental. El cursor se ancla al reloj del
@@ -123,6 +134,10 @@ function tablaDexie(tabla: TablaSync) {
  *   en la cola de sincronización, para que suba en el siguiente ciclo.
  * - Un registro con la misma marca y versión lo gana la nube (fuente de
  *   verdad en empates).
+ * - Si una fila remota choca con una columna única local (mismo nombre de
+ *   usuario o deudor con id distinto) y su versión es más reciente que la del
+ *   ocupante local, el ocupante se descarta en este dispositivo (solo local:
+ *   en la nube jamás podría subir por el índice único) y gana la fila remota.
  *
  * Devuelve el total de filas recibidas, las aplicadas de la nube y los
  * conflictos de unicidad local que no pudieron aplicarse.
@@ -149,10 +164,44 @@ export async function aplicarRemotos(
     try {
       await tablaLocal.put(remoto as never)
     } catch {
-      // Choque con una restricción local (p. ej. dos registros con el
-      // mismo nombre de usuario): se omite la fila y se deshace lo demás.
-      conflictos++
-      continue
+      // Choque con una restricción local: dos registros con el mismo valor en
+      // una columna única (nombre de usuario o deudor) pero ids distintos.
+      // El choque no lo causa el id (si fuese el mismo, el `put` reemplazaría),
+      // sino que este dispositivo quedó con una copia antigua de otra cuenta
+      // con el mismo nombre (p. ej. siembras/registros previos al SUPERADMIN).
+      const columnaClaveUnica = CLAVE_UNICA[tabla]
+      const valor = columnaClaveUnica
+        ? (remoto as unknown as Record<string, unknown>)[columnaClaveUnica]
+        : undefined
+      const ocupante =
+        columnaClaveUnica && typeof valor === 'string' && valor !== ''
+          ? await (tablaLocal as unknown as Table<Record<string, unknown>, string>)
+              .where(columnaClaveUnica)
+              .equals(valor)
+              .first()
+          : undefined
+      // El ocupante local puede nunca sincronizarse: la nube tiene el mismo
+      // nombre con un id distinto (índice único lower(...)), así que subirlo
+      // daría siempre 409. Si la nube tiene la versión más reciente, la fila
+      // remota debe ganar: el ocupante se descarta en este dispositivo (junto
+      // con su entrada de la cola) y se aplica el registro de la nube.
+      const remotoGana =
+        !!ocupante &&
+        (remoto.actualizadoEn > Number(ocupante.actualizadoEn) ||
+          (remoto.actualizadoEn === Number(ocupante.actualizadoEn) &&
+            remoto.version >= Number(ocupante.version)))
+      if (!remotoGana) {
+        conflictos++
+        continue
+      }
+      await tablaLocal.delete(String(ocupante.id))
+      await db.outbox.delete(idOutbox(tabla, String(ocupante.id)))
+      try {
+        await tablaLocal.put(remoto as never)
+      } catch {
+        conflictos++
+        continue
+      }
     }
     await db.outbox.delete(idOutbox(tabla, remoto.id))
     actualizados++
