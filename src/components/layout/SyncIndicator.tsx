@@ -165,7 +165,7 @@ export function SyncIndicator() {
       {abierto ? (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} aria-hidden="true" />
-          <div className="animate-aparecer absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl border border-zinc-200 bg-white p-4 shadow-pop">
+          <div className="animate-aparecer fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-zinc-200 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-pop sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[min(32rem,calc(100vh-6rem))] sm:w-80 sm:overflow-y-auto sm:rounded-2xl sm:pb-4">
             <button
               type="button"
               onClick={() => setAbierto(false)}
