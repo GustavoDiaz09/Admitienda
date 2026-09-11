@@ -41,12 +41,13 @@ async function llamar(
   accion: string,
   cuerpo?: unknown,
   query?: Record<string, string | number>,
+  requiereLlave = true,
 ): Promise<unknown> {
   if (!supabaseDisponible()) {
     throw new Error('Supabase no está configurado. Revise las variables de entorno.')
   }
   const llave = obtenerLlave()
-  if (!llave) {
+  if (requiereLlave && !llave) {
     throw new Error(
       'Falta la llave de sincronización de este dispositivo. Configúrela en el panel de sincronización.',
     )
@@ -132,6 +133,28 @@ export async function subirRemoto(tabla: TablaSync, filas: unknown[]): Promise<v
     return
   }
   await llamar('subir', { tabla, filas })
+}
+
+export interface LlaveNuevaRemota {
+  llave: string
+  /** `true` si fue la primera llave creada (arranque de la tienda en la nube). */
+  inicial: boolean
+}
+
+/**
+ * Crea una llave de sincronización nueva en la nube. Sin ninguna llave aún es
+ * el "arranque" (no requiere llave previa); si la tienda ya tiene llaves exige
+ * una vigente y devuelve la nueva para habilitar otro dispositivo.
+ */
+export async function crearLlaveRemoto(nombre?: string): Promise<LlaveNuevaRemota> {
+  // `crear_llave` no exige llave local: sin ninguna en la nube es el arranque
+  // de la tienda (la primera llave se genera sin credencial previa).
+  const datos = await llamar('crear_llave', { nombre: nombre ?? '' }, undefined, false)
+  if (datos == null || typeof datos !== 'object' || typeof (datos as { llave?: unknown }).llave !== 'string') {
+    throw new Error('La nube no devolvió una llave válida.')
+  }
+  const resultado = datos as { llave: string; inicial?: unknown }
+  return { llave: resultado.llave, inicial: resultado.inicial === true }
 }
 
 /**

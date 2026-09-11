@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../lib/db'
 import { inicializarApp } from '../lib/inicializacion'
+import { obtenerLlave, extraerLlaveDeUrl } from '../lib/llave'
 import { UsuarioController } from '../controller/UsuarioController'
 import { ProductoController } from '../controller/ProductoController'
 import { MovimientoController } from '../controller/MovimientoController'
@@ -9,6 +10,8 @@ import { TIPO_ADMIN, TIPO_INGRESO, TIPO_REGISTRADO } from '../model/types'
 beforeEach(async () => {
   await db.delete()
   await db.open()
+  window.localStorage.clear()
+  window.history.replaceState(null, '', '/')
 })
 
 describe('Arranque de la aplicación', () => {
@@ -20,6 +23,25 @@ describe('Arranque de la aplicación', () => {
     expect(await db.movimientos.count()).toBe(0)
     expect(await db.deudas.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('captura una llave pasada por URL (enlace/QR) y la limpia de la dirección', async () => {
+    window.history.replaceState(null, '', '/?llave=clave-de-otro-dispositivo')
+
+    await inicializarApp()
+
+    expect(obtenerLlave()).toBe('clave-de-otro-dispositivo')
+    expect(extraerLlaveDeUrl(window.location.href)).toBe('')
+  })
+
+  it('no sobrescribe una llave ya configurada con otra distinta en la URL', async () => {
+    window.localStorage.setItem('sistematienda.llave', 'llave-existente')
+    window.history.replaceState(null, '', '/?llave=otra-llave')
+
+    await inicializarApp()
+
+    expect(obtenerLlave()).toBe('llave-existente')
+    expect(extraerLlaveDeUrl(window.location.href)).toBe('')
   })
 
   it('promueve al primer usuario registrado a administrador', async () => {

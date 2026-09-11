@@ -18,6 +18,12 @@ function aHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+function aleatorioHex(longitudBytes: number): string {
+  const bytes = new Uint8Array(longitudBytes)
+  crypto.getRandomValues(bytes)
+  return aHex(bytes)
+}
+
 async function hashDeLlave(llave: string, salt: string, iteraciones: number): Promise<string> {
   const clave = await crypto.subtle.importKey(
     'raw',
@@ -91,6 +97,69 @@ const MAX_TAMANO_CUERPO = 2_000_000
 // isolate (546 WORKER_RESOURCE_LIMIT) en bases grandes.
 const MAX_FILAS_DESCARGAR = 50_000
 
+// Iteraciones de PBKDF2 para las llaves de sincronización (mismas que usa la
+// app para las contraseñas y que el explorador de `llaveValida`).
+const ITERACIONES_LLAVE = 210_000
+
+function leerNombreDeCuerpo(cuerpo: unknown): string {
+  if (cuerpo == null || typeof cuerpo !== 'object') return ''
+  const nombre = (cuerpo as Record<string, unknown>).nombre
+  return typeof nombre === 'string' ? nombre.trim() : ''
+}
+
+/**
+ * Crea una llave de sincronización nueva. Sin ninguna llave guardada en la
+ * nube actúa como "arranque" (el primer dispositivo la genera sin necesidad
+ * de otra); en cualquier otro caso exige una llave vigente (solo quien ya
+ * posee una puede habilitar otro dispositivo). La llave en claro se devuelve
+ * una única vez en la respuesta y nunca se guarda.
+ */
+async function manejarCrearLlave(
+  supabase: ReturnType<typeof createClient>,
+  req: Request,
+): Promise<Response> {
+  const { count, error: errorConteo } = await supabase
+    .from('llaves_sincronizacion')
+    .select('id', { count: 'exact', head: true })
+  if (errorConteo) {
+    console.error('crear_llave:', errorConteo.message)
+    return jsonDatos(500, { error: 'No se pudo consultar las llaves existentes.' })
+  }
+  const totalLlaves = count ?? 0
+  if (totalLlaves > 0) {
+    const llaveActual = req.headers.get('x-llave-sincronizacion') ?? ''
+    if (!(await llaveValida(supabase, llaveActual))) {
+      return jsonDatos(401, { error: 'Llave de sincronización inválida.' })
+    }
+  }
+
+  let nombre = ''
+  if (req.method === 'POST') {
+    try {
+      nombre = leerNombreDeCuerpo(await req.json())
+    } catch {
+      // Sin cuerpo: se usa el nombre por defecto de la columna.
+    }
+  }
+
+  const llaveNueva = aleatorioHex(24)
+  const salt = aleatorioHex(32)
+  const hash = await hashDeLlave(llaveNueva, salt, ITERACIONES_LLAVE)
+  const fila: Record<string, string> = {
+    llave_salt: salt,
+    llave_hash: `pbkdf2$${ITERACIONES_LLAVE}$${hash}`,
+  }
+  if (nombre) {
+    fila.nombre = nombre
+  }
+  const { error: errorInsertar } = await supabase.from('llaves_sincronizacion').insert(fila)
+  if (errorInsertar) {
+    console.error('crear_llave:', errorInsertar.message)
+    return jsonDatos(500, { error: 'No se pudo crear la llave de sincronización.' })
+  }
+  return jsonDatos(200, { llave: llaveNueva, inicial: totalLlaves === 0 })
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== 'GET' && req.method !== 'POST') {
@@ -98,12 +167,16 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, CLAVE_SERVICE)
+    const accion = new URL(req.url).searchParams.get('accion')
+
+    if (accion === 'crear_llave') {
+      return manejarCrearLlave(supabase, req)
+    }
+
     const llave = req.headers.get('x-llave-sincronizacion') ?? ''
     if (!(await llaveValida(supabase, llave))) {
       return jsonDatos(401, { error: 'Llave de sincronización inválida.' })
     }
-
-    const accion = new URL(req.url).searchParams.get('accion')
 
     if (accion === 'ping') {
       return jsonDatos(200, { ok: true })
