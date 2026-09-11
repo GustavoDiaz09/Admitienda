@@ -219,7 +219,7 @@ export function AppShell() {
       <div className="lg:pl-72">
         <div
           className={cn(
-            'fixed inset-0 z-40 bg-zinc-950/40 transition-opacity lg:hidden',
+            'fixed inset-0 z-50 bg-zinc-950/40 transition-opacity lg:hidden',
             menuAbierto ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
           onClick={() => setMenuAbierto(false)}

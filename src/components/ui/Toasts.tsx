@@ -20,7 +20,7 @@ export function Toasts() {
   const descartar = useToastStore((estado) => estado.descartar)
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-stretch gap-2 sm:inset-x-auto sm:right-6 sm:w-96">
+    <div className="pointer-events-none fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[80] flex flex-col items-stretch gap-2 sm:inset-x-auto sm:right-6 sm:w-96 lg:bottom-4">
       {avisos.map((aviso) => {
         const Icono = iconos[aviso.tipo]
         return (
