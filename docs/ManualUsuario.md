@@ -47,9 +47,12 @@ contraseña nueva.
 | **Invitado** | Entrar como invitado y ver la tabla de productos (solo lectura).       |
 | **Registrado**| Consultar en solo lectura Resúmenes, Productos, Ingresos y egresos y Deudas; solicitar permiso de administrador. |
 | **Administrador** | Todo: productos, movimientos, resúmenes, usuarios y alertas.   |
+| **Superadministrador** | Cuenta única del dueño del sistema. Todo lo del administrador y además puede dar/quitar el rol de administrador a otros usuarios y eliminar administradores (incluso el último). Su cuenta es inamovible: no se elimina, no se renombra ni cambia de rol. |
 
 Como invitado puedes pulsar *Entrar como invitado* en la pantalla de ingreso
-para explorar los productos sin registrarte.
+para explorar los productos sin registrarte. La cuenta de superadministrador no
+se registra desde la aplicación: es la cuenta del dueño, activada una sola vez
+en la nube y repartida a los dispositivos mediante la sincronización.
 
 ## 3. Módulo de Productos
 
@@ -82,7 +85,14 @@ Muestra los totales del período:
 
 Pestaña **Usuarios**: lista los usuarios activos; puedes modificarlos
 (renombrar, cambiar el indicio) o eliminarlos. No se puede eliminar el último
-administrador.
+administrador (salvo que quien lo hace sea el superadministrador).
+
+Si tu cuenta es **superadministrador**, en cada fila de un usuario registrado
+verás un botón para **hacerlo administrador** y, en la de los administradores,
+otro para **quitarle el rol** (queda como registrado). De esta forma puedes
+conceder o retirar el permiso de administrador directamente, sin pasar por la
+pestaña de Solicitudes. La cuenta del superadministrador no se puede eliminar
+ni modificar por otra cuenta.
 
 Pestaña **Solicitudes**: aprueba o rechaza las peticiones de permiso de
 administrador.

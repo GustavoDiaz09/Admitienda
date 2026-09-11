@@ -160,6 +160,19 @@ Reglas de negocio de integridad:
   motivo queda visible en el `error` del store de sincronización; el registro
   local se conserva. Los 5xx, los fallos de red y los 401 (`ErrorRemoto` con
   `definitivo=false`) se comportan como antes (intento, espera y reintento).
+- **Caso 409 al borrar un usuario con `id` divergente:** la unicidad remota
+  es `lower(nombre_usuario)` y cada dispositivo trabaja con su propio `id`. Si
+  una misma cuenta existe localmente con un `id` distinto al que ya vive en la
+  nube (p. ej. una cuenta `admin` sembrada manualmente en la nube y abierta en
+  otro dispositivo que nunca la sincronizó), la **tumba** local del borrado se
+  sube como un **insert** por ese `id` → choca con el índice único y el edge
+  responde **409**: el borrado queda solo local y la cuenta sigue viva en la
+  nube. No es un fallo de cliente: es un choque de identidades. Corrección
+  manual documentada: tumbar la fila directamente en la nube con un
+  `actualizado_en` más reciente que el de todos los dispositivos (el pull LWW
+  la propaga como borrado a todos) y, si se desea, eliminarla físicamente con
+  `DELETE` (solo si no hay otros dispositivos que aún la alojen viva, o la
+  re-subirían).
 - **Descarga paginada e incremental en la nube:** la acción `descargar` de la
   Edge Function itera con `.order('id').range(...)` en lotes de 1000 para no
   truncar tablas grandes; si viene el query param `desde` (epoch ms finito y

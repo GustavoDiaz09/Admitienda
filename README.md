@@ -48,7 +48,10 @@ npm.cmd test           :: pruebas Vitest (fake-indexeddb)
 No existen credenciales ni datos por defecto: cada cuenta se crea desde
 *Crear cuenta*. La **primera persona registrada** asume automáticamente el rol
 de administrador; las siguientes quedan como usuarios registrados (solo lectura
-hasta que un administrador apruebe su permiso).
+hasta que un administrador apruebe su permiso). El **rol SUPERADMIN** no se
+registra: es la cuenta única del dueño, promovida una sola vez en la nube
+( migración `superadmin_unico_y_promocion_dueno`) y distribuida a todos los
+dispositivos por sincronización.
 
 ## Roles
 
@@ -58,6 +61,12 @@ hasta que un administrador apruebe su permiso).
   administrador.
 - **Administrador:** acceso completo (productos, movimientos, resúmenes,
   gestión de usuarios, deudas y alertas de inventario).
+- **Superadministrador:** cuenta única del dueño (nombre fijo reservado). Queda
+  por encima del administrador: da y quita el rol de administrador directamente
+  (sin solicitudes) y puede eliminar administradores incluso al último. Su
+  propia cuenta es inamovible: no se elimina, no se renombra y no cambia de rol.
+  Se otorga una sola vez en la nube y llega a los dispositivos por
+  sincronización.
 
 ## Estructura del proyecto
 
