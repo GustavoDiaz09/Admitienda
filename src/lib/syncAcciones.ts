@@ -1,5 +1,6 @@
 import { respaldarTodoEnServidor, traerDatosDelServidor } from '../sync/pull'
-import { refrescarPendientes, sincronizarAhora } from '../sync/syncEngine'
+import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../sync/syncEngine'
+import { obtenerLlave } from './llave'
 import { avisarError, avisarExito, avisarInfo } from './toast'
 
 /** Acciones de sincronización disponibles para un administrador. */
@@ -15,7 +16,26 @@ const EVENTO_DATOS = 'datos:sincronizados'
 export async function ejecutarAccionDeSync(accion: TipoAccionSync): Promise<void> {
   try {
     if (accion === 'sincronizar') {
+      if (navigator.onLine === false) {
+        avisarError('No hay conexión para sincronizar. Reintente cuando esté en línea.')
+        return
+      }
+      if (!obtenerLlave()) {
+        avisarError('Este dispositivo aún no tiene llave de sincronización configurada.')
+        return
+      }
       const { subidos, fallados } = await sincronizarAhora()
+      const estadoSync = useSyncStore.getState()
+      if (estadoSync.llaveInvalida) {
+        avisarError(
+          'La llave de sincronización no es válida. Verifíquela en el panel de sincronización.',
+        )
+        return
+      }
+      if (!estadoSync.enLinea && subidos === 0) {
+        avisarError('No hay conexión con la nube en este momento.')
+        return
+      }
       if (subidos > 0) {
         avisarExito(`${subidos} cambio(s) sincronizados con la nube.`)
       } else {

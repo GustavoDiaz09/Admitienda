@@ -14,6 +14,7 @@ export function Registro() {
   const navegar = useNavigate()
   const [nombre, setNombre] = useState('')
   const [contrasena, setContrasena] = useState('')
+  const [confirmacion, setConfirmacion] = useState('')
   const [indicio, setIndicio] = useState('')
   const [solicitaAdmin, setSolicitaAdmin] = useState(false)
   const [cargando, setCargando] = useState(false)
@@ -22,6 +23,10 @@ export function Registro() {
   const enviar = async (evento: FormEvent) => {
     evento.preventDefault()
     setError(null)
+    if (contrasena !== confirmacion) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
     setCargando(true)
     try {
       const controlador = new UsuarioController()
@@ -65,6 +70,21 @@ export function Registro() {
             placeholder="Mínimo 6 caracteres"
             value={contrasena}
             onChange={(e) => setContrasena(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
+        </Campo>
+        <Campo
+          etiqueta="Confirmar contraseña"
+          htmlFor="reg-clave2"
+          error={confirmacion && contrasena !== confirmacion ? 'Las contraseñas no coinciden.' : undefined}
+        >
+          <Entrada
+            id="reg-clave2"
+            type="password"
+            placeholder="Repita la contraseña"
+            value={confirmacion}
+            onChange={(e) => setConfirmacion(e.target.value)}
             autoComplete="new-password"
             required
           />

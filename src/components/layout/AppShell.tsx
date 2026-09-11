@@ -5,6 +5,7 @@ import {
   BellRinging,
   ChartBar,
   HandCoins,
+  Key,
   List,
   Package,
   ShieldCheck,
@@ -15,12 +16,14 @@ import {
 } from '@phosphor-icons/react'
 import { useSesionStore } from '../../controller/SessionController'
 import { UsuarioController } from '../../controller/UsuarioController'
+import { UsuarioDao } from '../../dao/UsuarioDao'
 import { TIPO_ADMIN, TIPO_REGISTRADO } from '../../model/types'
 import { actualizarConteoAlertas, useAlertasStore } from '../../lib/conteoAlertas'
 import { avisarError, avisarExito } from '../../lib/toast'
 import { cn } from '../../lib/cn'
 import { Button } from '../ui/Button'
 import { SyncIndicator } from './SyncIndicator'
+import { CambiarContrasena } from '../auth/CambiarContrasena'
 
 const TITULOS: Record<string, string> = {
   '/resumenes': 'Resúmenes financieros',
@@ -67,13 +70,30 @@ export function AppShell() {
   const contarAlertas = useAlertasStore((estado) => estado.count)
   const { pathname } = useLocation()
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [cambiarContrasenaAbierto, setCambiarContrasenaAbierto] = useState(false)
 
   const esAdmin = usuarioActivo?.tipo_usuario === TIPO_ADMIN
   const esRegistrado = usuarioActivo?.tipo_usuario === TIPO_REGISTRADO
 
+  const revalidarSesionActiva = async () => {
+    const actual = useSesionStore.getState().usuarioActivo
+    if (!actual) return
+    const usuarioActualizado = await new UsuarioDao().buscarPorId(actual.id)
+    if (!usuarioActualizado) {
+      useSesionStore.getState().cerrarSesion()
+      return
+    }
+    if (usuarioActualizado.version !== actual.version) {
+      useSesionStore.getState().iniciarSesion(usuarioActualizado)
+    }
+  }
+
   useEffect(() => {
     void actualizarConteoAlertas()
-    const alRecargar = () => void actualizarConteoAlertas()
+    const alRecargar = () => {
+      void actualizarConteoAlertas()
+      void revalidarSesionActiva()
+    }
     window.addEventListener('datos:sincronizados', alRecargar)
     return () => window.removeEventListener('datos:sincronizados', alRecargar)
   }, [])
@@ -159,7 +179,20 @@ export function AppShell() {
         ))}
       </nav>
 
-      <div className="border-t border-white/5 p-3">
+      <div className="space-y-1 border-t border-white/5 p-3">
+        {usuarioActivo ? (
+          <button
+            type="button"
+            onClick={() => {
+              cerrar()
+              setCambiarContrasenaAbierto(true)
+            }}
+            className="focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <Key size={19} weight="regular" />
+            Cambiar contraseña
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => {
@@ -289,6 +322,12 @@ export function AppShell() {
           ))}
         </div>
       </nav>
+
+      <CambiarContrasena
+        abierto={cambiarContrasenaAbierto}
+        onCerrar={() => setCambiarContrasenaAbierto(false)}
+        usuario={usuarioActivo}
+      />
     </div>
   )
 }

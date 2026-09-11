@@ -1,8 +1,37 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '../lib/db'
-import { aplicarRemotos, guardarCursorDescarga, obtenerCursorDescarga } from '../sync/pull'
+import {
+  aplicarRemotos,
+  guardarCursorDescarga,
+  obtenerCursorDescarga,
+  obtenerProximaDescargaCompleta,
+  programarProximaDescargaCompleta,
+  traerDatosDelServidor,
+} from '../sync/pull'
 import { idOutbox } from '../sync/outbox'
+import { descargarRemoto } from '../lib/remoto'
 import type { Producto, RegistroBase } from '../model/types'
+
+vi.mock('../lib/supabase', () => ({
+  supabaseUrl: 'https://proyecto.supabase.co',
+  supabaseDisponible: () => true,
+}))
+
+vi.mock('../lib/remoto', () => ({
+  ErrorRemoto: class ErrorRemoto extends Error {
+    readonly estado: number
+    readonly definitivo: boolean
+    constructor(mensaje: string, estado = 0) {
+      super(mensaje)
+      this.estado = estado
+      this.definitivo = estado >= 400 && estado < 500
+    }
+  },
+  descargarRemoto: vi.fn(async (_desde?: number) => ({ ahora: 0, tablas: {} })),
+  subirRemoto: vi.fn(async () => undefined),
+  verificarRemoto: vi.fn(async () => true),
+  hayAdminRemoto: vi.fn(async () => null),
+}))
 
 beforeEach(async () => {
   await db.delete()
@@ -159,5 +188,70 @@ describe('Cursor de descarga incremental', () => {
     await db.open()
 
     expect(await obtenerCursorDescarga()).toBe(0)
+  })
+})
+
+describe('Cursor de descarga derivado del reloj del servidor', () => {
+  const AHORA_SERVIDOR = Date.now()
+  const MARGEN = 5 * 60 * 1000
+  const INTERVALO_RESCAN = 24 * 60 * 60 * 1000
+
+  it('ancla el cursor al reloj del servidor menos el margen y programa el primer rescaneo', async () => {
+    vi.mocked(descargarRemoto).mockResolvedValue({ ahora: AHORA_SERVIDOR, tablas: {} })
+
+    await traerDatosDelServidor()
+
+    expect(await obtenerCursorDescarga()).toBe(AHORA_SERVIDOR - MARGEN)
+    expect(await obtenerProximaDescargaCompleta()).toBe(AHORA_SERVIDOR + INTERVALO_RESCAN)
+  })
+
+  it('la bajada incremental pasa el cursor como `desde` y no reprograma el rescaneo', async () => {
+    await guardarCursorDescarga(1_700_000_000_000)
+    await programarProximaDescargaCompleta(AHORA_SERVIDOR + INTERVALO_RESCAN)
+    vi.mocked(descargarRemoto).mockResolvedValue({ ahora: AHORA_SERVIDOR, tablas: {} })
+
+    await traerDatosDelServidor()
+
+    const desde = vi.mocked(descargarRemoto).mock.calls.at(-1)?.[0]
+    expect(desde).toBe(1_700_000_000_000)
+    expect(await obtenerProximaDescargaCompleta()).toBe(AHORA_SERVIDOR + INTERVALO_RESCAN)
+  })
+
+  it('cuando vence el rescaneo vuelve a bajar toda la base y reprograma', async () => {
+    await guardarCursorDescarga(1_700_000_000_000)
+    await programarProximaDescargaCompleta(AHORA_SERVIDOR - 1)
+    vi.mocked(descargarRemoto).mockResolvedValue({ ahora: AHORA_SERVIDOR, tablas: {} })
+
+    await traerDatosDelServidor()
+
+    const desde = vi.mocked(descargarRemoto).mock.calls.at(-1)?.[0]
+    expect(desde).toBeUndefined()
+    expect(await obtenerProximaDescargaCompleta()).toBe(AHORA_SERVIDOR + INTERVALO_RESCAN)
+  })
+
+  it('una bajada manual completa también vuelve a programar el rescaneo', async () => {
+    await guardarCursorDescarga(1_700_000_000_000)
+    await programarProximaDescargaCompleta(1_900_000_000_000)
+    const sinAhora = vi.fn(async () => ({ ahora: AHORA_SERVIDOR, tablas: {} }))
+    vi.mocked(descargarRemoto).mockImplementation(sinAhora)
+
+    await traerDatosDelServidor({ completo: true })
+
+    expect(sinAhora).toHaveBeenCalledWith(undefined)
+    expect(await obtenerProximaDescargaCompleta()).toBe(AHORA_SERVIDOR + INTERVALO_RESCAN)
+  })
+
+  it('si el servidor no reporta `ahora`, usa el reloj local como respaldo', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(1_800_000_000_000)
+      vi.mocked(descargarRemoto).mockResolvedValue({ ahora: 0, tablas: {} })
+
+      await traerDatosDelServidor()
+
+      expect(await obtenerCursorDescarga()).toBe(1_800_000_000_000 - MARGEN)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

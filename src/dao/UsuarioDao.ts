@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { nuevoRegistro, actualizarRegistro, eliminarRegistro } from '../lib/mutaciones'
+import { nuevoRegistro, actualizarRegistro, eliminarRegistro, type ContextoEscritura } from '../lib/mutaciones'
 import { TIPO_ADMIN, type RegistroBase, type Usuario } from '../model/types'
 
 /**
@@ -13,8 +13,8 @@ export class UsuarioDao {
   }
 
   /** Modifica un usuario existente y encola el cambio. */
-  async actualizar(usuario: Usuario): Promise<Usuario> {
-    return actualizarRegistro('usuarios', usuario)
+  async actualizar(usuario: Usuario, contexto?: ContextoEscritura): Promise<Usuario> {
+    return actualizarRegistro('usuarios', usuario, contexto)
   }
 
   /** Borrado lógico de un usuario (se propaga vía sincronización). */

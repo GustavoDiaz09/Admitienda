@@ -26,6 +26,7 @@ import { Modal } from '../components/ui/Modal'
 import { Tabla, Celda } from '../components/ui/Tabla'
 import { ConfirmButton } from '../components/ui/ConfirmButton'
 import { EncabezadoSeccion, Esqueleto, EstadoVacio } from '../components/ui/Base'
+import { ErrorDeCarga } from '../components/ui/ErrorDeCarga'
 import { cn } from '../lib/cn'
 
 type Pestana = 'usuarios' | 'solicitudes'
@@ -55,13 +56,24 @@ export function Usuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[] | null>(null)
   const [solicitudes, setSolicitudes] = useState<SolicitudAdmin[] | null>(null)
   const [edicion, setEdicion] = useState<Usuario | null>(null)
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
 
   const cargarUsuarios = useCallback(async () => {
-    setUsuarios(await new UsuarioController().obtenerUsuarios())
+    try {
+      setUsuarios(await new UsuarioController().obtenerUsuarios())
+      setErrorDeCarga(null)
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
+    }
   }, [])
 
   const cargarSolicitudes = useCallback(async () => {
-    setSolicitudes(await new UsuarioController().obtenerSolicitudes())
+    try {
+      setSolicitudes(await new UsuarioController().obtenerSolicitudes())
+      setErrorDeCarga(null)
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
+    }
   }, [])
 
   useEffect(() => {
@@ -128,7 +140,9 @@ export function Usuarios() {
 
       {pestana === 'usuarios' ? (
         <Card>
-          {usuarios === null ? (
+          {usuarios === null && errorDeCarga ? (
+            <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargarUsuarios()} />
+          ) : usuarios === null ? (
             <div className="space-y-3 p-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Esqueleto key={i} className="h-11 w-full" />
@@ -191,7 +205,9 @@ export function Usuarios() {
         </Card>
       ) : (
         <Card>
-          {solicitudes === null ? (
+          {solicitudes === null && errorDeCarga ? (
+            <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargarSolicitudes()} />
+          ) : solicitudes === null ? (
             <div className="space-y-3 p-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Esqueleto key={i} className="h-11 w-full" />

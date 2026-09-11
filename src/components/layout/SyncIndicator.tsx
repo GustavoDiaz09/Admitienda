@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CloudArrowDown,
   CloudArrowUp,
@@ -11,9 +11,15 @@ import { useSesionStore } from '../../controller/SessionController'
 import { TIPO_ADMIN } from '../../model/types'
 import { horaCorta } from '../../lib/formato'
 import { avisarExito } from '../../lib/toast'
-import { obtenerLlave, guardarLlave } from '../../lib/llave'
+import { obtenerLlave, guardarLlave, hayLlaveConfigurada } from '../../lib/llave'
 import { ejecutarAccionDeSync, type TipoAccionSync } from '../../lib/syncAcciones'
 import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../../sync/syncEngine'
+import {
+  formatearBytes,
+  revisarCuotaDeAlmacenamiento,
+  UMBRAL_CUOTA_ALERTA,
+  type InfoAlmacenamiento,
+} from '../../lib/almacenamiento'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { cn } from '../../lib/cn'
@@ -22,10 +28,34 @@ import { cn } from '../../lib/cn'
 export function SyncIndicator() {
   const esAdmin = useSesionStore((estado) => estado.usuarioActivo?.tipo_usuario) === TIPO_ADMIN
   const hayCuenta = useSesionStore((estado) => estado.usuarioActivo !== null)
-  const { enLinea, pendientes, sincronizando, ultimaSync } = useSyncStore()
+  const { enLinea, pendientes, sincronizando, ultimaSync, error, llaveInvalida } = useSyncStore()
   const [abierto, setAbierto] = useState(false)
   const [accionActiva, setAccionActiva] = useState<TipoAccionSync | null>(null)
   const [llaveTexto, setLlaveTexto] = useState(obtenerLlave())
+  const [infoAlmacenamiento, setInfoAlmacenamiento] = useState<InfoAlmacenamiento | null>(null)
+
+  const hayLlave = hayLlaveConfigurada()
+  const estadoTexto = llaveInvalida
+    ? 'Llave no válida'
+    : !hayLlave
+      ? 'Sin llave'
+      : enLinea
+        ? 'En línea'
+        : 'Sin conexión'
+  const estadoColor = llaveInvalida || !hayLlave ? 'bg-amber-500' : enLinea ? 'bg-emerald-500' : 'bg-red-400'
+
+  useEffect(() => {
+    let activo = true
+    void revisarCuotaDeAlmacenamiento()
+      .then((info) => {
+        if (activo) {
+          setInfoAlmacenamiento(info)
+        }
+      })
+    return () => {
+      activo = false
+    }
+  }, [])
 
   const ejecutar = async (accion: TipoAccionSync) => {
     setAccionActiva(accion)
@@ -56,12 +86,12 @@ export function SyncIndicator() {
           <span
             className={cn(
               'size-2 rounded-full',
-              enLinea ? 'bg-emerald-500' : 'bg-red-400',
+              estadoColor,
             )}
           />
         </span>
         <span className="hidden sm:inline">
-          {enLinea ? 'En línea' : 'Sin conexión'}
+          {estadoTexto}
         </span>
         {pendientes > 0 ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
@@ -93,9 +123,7 @@ export function SyncIndicator() {
             <dl className="mt-3 space-y-2 text-[13px]">
               <div className="flex items-center justify-between">
                 <dt className="text-zinc-500">Conexión</dt>
-                <dd className="font-medium text-zinc-800">
-                  {enLinea ? 'En línea' : 'Sin conexión'}
-                </dd>
+                <dd className="font-medium text-zinc-800">{estadoTexto}</dd>
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-zinc-500">Cambios pendientes</dt>
@@ -108,6 +136,56 @@ export function SyncIndicator() {
                 </dd>
               </div>
             </dl>
+
+            {!hayLlave ? (
+              <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                Este dispositivo aún no tiene llave de sincronización. Sin ella, los datos no se
+                respaldan en la nube.
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs leading-snug text-red-700">
+                <span className="font-semibold">Error de sincronización: </span>
+                {error}
+              </div>
+            ) : null}
+
+            {infoAlmacenamiento ? (
+              <div className="mt-3 rounded-xl bg-zinc-50 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-700">
+                    Almacenamiento local
+                  </span>
+                  <span
+                    className={cn(
+                      'text-xs font-medium',
+                      infoAlmacenamiento.porcentaje >= UMBRAL_CUOTA_ALERTA
+                        ? 'text-red-600'
+                        : 'text-zinc-600',
+                    )}
+                  >
+                    {infoAlmacenamiento.porcentaje}%
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      infoAlmacenamiento.porcentaje >= UMBRAL_CUOTA_ALERTA
+                        ? 'bg-red-500'
+                        : 'bg-emerald-500',
+                    )}
+                    style={{ width: `${Math.min(infoAlmacenamiento.porcentaje, 100)}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
+                  {infoAlmacenamiento.porcentaje >= UMBRAL_CUOTA_ALERTA
+                    ? 'Cuota casi llena: haga un respaldo en la nube y libere espacio, o el navegador podría borrar los datos de la tienda.'
+                    : `${formatearBytes(infoAlmacenamiento.usoBytes)} de ${formatearBytes(infoAlmacenamiento.cuotaBytes)}${infoAlmacenamiento.persistente ? ' · almacenamiento persistente' : ''}.`}
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-4 space-y-3 border-t border-zinc-100 pt-4">
               {hayCuenta ? (
@@ -157,17 +235,24 @@ export function SyncIndicator() {
               </Button>
               {esAdmin ? (
                 <>
-                  <Button
+                  <ConfirmButton
                     variante="secundario"
                     tamanio="sm"
                     className="w-full"
-                    cargando={accionActiva === 'subir'}
                     icono={CloudArrowUp}
                     disabled={!enLinea}
-                    onClick={() => void ejecutar('subir')}
-                  >
-                    Subir todo a la nube
-                  </Button>
+                    accion="Subir todo a la nube"
+                    titulo="Subir todo a la nube"
+                    mensaje={
+                      <>
+                        Se <strong>sobrescribirá la copia en la nube</strong> con
+                        todos los datos de este dispositivo. Si otro terminal tiene
+                        cambios más recientes que este, quedarán temporalmente como
+                        respaldo local. ¿Continuar?
+                      </>
+                    }
+                    confirmar={() => void ejecutar('subir')}
+                  />
                   <ConfirmButton
                     variante="secundario"
                     tamanio="sm"

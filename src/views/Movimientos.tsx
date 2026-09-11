@@ -27,6 +27,7 @@ import { Modal } from '../components/ui/Modal'
 import { Tabla, Celda, CeldaNumerica } from '../components/ui/Tabla'
 import { ConfirmButton } from '../components/ui/ConfirmButton'
 import { EncabezadoSeccion, Esqueleto, EstadoVacio } from '../components/ui/Base'
+import { ErrorDeCarga } from '../components/ui/ErrorDeCarga'
 import { cn } from '../lib/cn'
 
 type FiltroMovimiento = 'TODOS' | 'INGRESO' | 'EGRESO'
@@ -39,16 +40,22 @@ export function Movimientos() {
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState<FiltroMovimiento>('TODOS')
   const [edicion, setEdicion] = useState<Movimiento | null | 'nuevo'>(null)
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     const controlador = new MovimientoController()
-    const [historial, ingresos, egresos] = await Promise.all([
-      controlador.obtenerHistorial(),
-      controlador.totalIngresos(),
-      controlador.totalEgresos(),
-    ])
-    setMovimientos(historial)
-    setTotales({ ingresos, egresos })
+    try {
+      const [historial, ingresos, egresos] = await Promise.all([
+        controlador.obtenerHistorial(),
+        controlador.totalIngresos(),
+        controlador.totalEgresos(),
+      ])
+      setMovimientos(historial)
+      setTotales({ ingresos, egresos })
+      setErrorDeCarga(null)
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
+    }
   }, [])
 
   useEffect(() => {
@@ -120,7 +127,9 @@ export function Movimientos() {
           ) : null}
         </div>
 
-        {movimientos === null ? (
+        {movimientos === null && errorDeCarga ? (
+          <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargar()} />
+        ) : movimientos === null ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Esqueleto key={i} className="h-11 w-full" />

@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Key, User as UserIcon } from '@phosphor-icons/react'
 import { useSesionStore } from '../controller/SessionController'
@@ -9,6 +9,7 @@ import { FormAuthHeader } from '../components/auth/FormAuthHeader'
 import { Button } from '../components/ui/Button'
 import { Campo, Entrada } from '../components/ui/Campo'
 import { avisarExito } from '../lib/toast'
+import { formatearEspera, type EstadoBloqueo } from '../lib/intentos'
 
 /** Pantalla de inicio de sesión (pública). */
 export function Login() {
@@ -20,6 +21,20 @@ export function Login() {
   const [contrasena, setContrasena] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [bloqueo, setBloqueo] = useState<EstadoBloqueo | null>(null)
+
+  useEffect(() => {
+    let vigente = true
+    const controlador = new UsuarioController()
+    controlador.consultarBloqueoDeLogin(nombre).then((estado) => {
+      if (vigente) {
+        setBloqueo(estado)
+      }
+    })
+    return () => {
+      vigente = false
+    }
+  }, [nombre])
 
   const entrar = async (evento: FormEvent) => {
     evento.preventDefault()
@@ -27,10 +42,25 @@ export function Login() {
     setCargando(true)
     try {
       const controlador = new UsuarioController()
+      const estadoPrevio = await controlador.consultarBloqueoDeLogin(nombre)
+      if (estadoPrevio.bloqueado) {
+        setCargando(false)
+        setBloqueo(estadoPrevio)
+        setError(
+          `Demasiados intentos fallidos. Vuelva a intentarlo en ${formatearEspera(estadoPrevio.esperaRestanteMs)}.`,
+        )
+        return
+      }
       const usuario = await controlador.iniciarSesion(nombre, contrasena)
       if (!usuario) {
         setCargando(false)
-        setError('Usuario o contraseña incorrectos.')
+        const trasFallo = await controlador.consultarBloqueoDeLogin(nombre)
+        setBloqueo(trasFallo)
+        setError(
+          trasFallo.bloqueado
+            ? `Demasiados intentos fallidos. Vuelva a intentarlo en ${formatearEspera(trasFallo.esperaRestanteMs)}.`
+            : 'Usuario o contraseña incorrectos.',
+        )
         return
       }
       iniciarSesion(usuario)
@@ -79,8 +109,12 @@ export function Login() {
           <p role="alert" className="text-sm font-medium text-red-600">
             {error}
           </p>
+        ) : bloqueo?.bloqueado ? (
+          <p role="alert" className="text-sm font-medium text-red-600">
+            Demasiados intentos fallidos. Vuelva a intentarlo en {formatearEspera(bloqueo.esperaRestanteMs)}.
+          </p>
         ) : null}
-        <Button type="submit" cargando={cargando} className="w-full">
+        <Button type="submit" cargando={cargando} disabled={!!bloqueo?.bloqueado} className="w-full">
           Iniciar sesión
         </Button>
       </form>

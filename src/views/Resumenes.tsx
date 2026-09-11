@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { ConfirmButton } from '../components/ui/ConfirmButton'
 import { EncabezadoSeccion, Esqueleto } from '../components/ui/Base'
+import { ErrorDeCarga } from '../components/ui/ErrorDeCarga'
 import { cn } from '../lib/cn'
 
 interface DatosResumen {
@@ -38,27 +39,33 @@ export function Resumenes() {
   const [datos, setDatos] = useState<DatosResumen | null>(null)
   const { enLinea, pendientes, ultimaSync } = useSyncStore()
   const [accion, setAccion] = useState<'sincronizar' | 'subir' | 'bajar' | null>(null)
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     const movimientos = new MovimientoController()
     const productos = new ProductoController()
-    const [semana, mes, totalIngresos, totalEgresos, listaProductos, stockBajo] =
-      await Promise.all([
-        movimientos.obtenerResumenSemanal(),
-        movimientos.obtenerResumenMensual(),
-        movimientos.totalIngresos(),
-        movimientos.totalEgresos(),
-        productos.obtenerProductos(),
-        productos.obtenerStockBajo(),
-      ])
-    setDatos({
-      semana: Array.from({ length: 7 }, (_, i) => semana.get(i + 1) ?? 0),
-      mes: Array.from({ length: 12 }, (_, i) => mes.get(i + 1) ?? 0),
-      totalIngresos,
-      totalEgresos,
-      productos: listaProductos.length,
-      stockBajo: stockBajo.length,
-    })
+    try {
+      const [semana, mes, totalIngresos, totalEgresos, listaProductos, stockBajo] =
+        await Promise.all([
+          movimientos.obtenerResumenSemanal(),
+          movimientos.obtenerResumenMensual(),
+          movimientos.totalIngresos(),
+          movimientos.totalEgresos(),
+          productos.obtenerProductos(),
+          productos.obtenerStockBajo(),
+        ])
+      setDatos({
+        semana: Array.from({ length: 7 }, (_, i) => semana.get(i + 1) ?? 0),
+        mes: Array.from({ length: 12 }, (_, i) => mes.get(i + 1) ?? 0),
+        totalIngresos,
+        totalEgresos,
+        productos: listaProductos.length,
+        stockBajo: stockBajo.length,
+      })
+      setErrorDeCarga(null)
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
+    }
   }, [])
 
   useEffect(() => {
@@ -83,7 +90,9 @@ export function Resumenes() {
         descripcion="Panorama general de la semana, del año y del inventario."
       />
 
-      {datos === null ? (
+      {datos === null && errorDeCarga ? (
+        <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargar()} />
+      ) : datos === null ? (
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {Array.from({ length: 5 }).map((_, i) => (

@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { nuevoRegistro, actualizarRegistro } from '../lib/mutaciones'
+import { nuevoRegistro, actualizarRegistro, type ContextoEscritura } from '../lib/mutaciones'
 import { ESTADO_PENDIENTE, type EstadoSolicitud, type SolicitudAdmin } from '../model/types'
 import { formatFecha } from '../lib/fecha'
 
@@ -18,10 +18,14 @@ export class SolicitudAdminDao {
   }
 
   /** Cambia el estado de una solicitud y encola el cambio. */
-  async actualizarEstado(idDeSolicitud: string, nuevoEstado: EstadoSolicitud): Promise<void> {
+  async actualizarEstado(
+    idDeSolicitud: string,
+    nuevoEstado: EstadoSolicitud,
+    contexto?: ContextoEscritura,
+  ): Promise<void> {
     const solicitud = await db.solicitudes_admin.get(idDeSolicitud)
     if (solicitud) {
-      await actualizarRegistro('solicitudes_admin', { ...solicitud, estado: nuevoEstado })
+      await actualizarRegistro('solicitudes_admin', { ...solicitud, estado: nuevoEstado }, contexto)
     }
   }
 
@@ -43,6 +47,15 @@ export class SolicitudAdminDao {
       .equals(idDeUsuario)
       .toArray()
     return lista.some((s) => !s.eliminado && s.estado === ESTADO_PENDIENTE)
+  }
+
+  /** Devuelve las solicitudes PENDIENTE no eliminadas de un usuario. */
+  async obtenerPendientesDe(idDeUsuario: string): Promise<SolicitudAdmin[]> {
+    const lista = await db.solicitudes_admin
+      .where('usuario_id')
+      .equals(idDeUsuario)
+      .toArray()
+    return lista.filter((s) => !s.eliminado && s.estado === ESTADO_PENDIENTE)
   }
 
   /** Devuelve una solicitud por su id. */

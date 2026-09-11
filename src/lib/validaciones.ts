@@ -13,6 +13,14 @@ export function textoNoVacio(valor: string | null | undefined, nombreCampo: stri
 }
 
 /**
+ * Normaliza el nombre de un deudor para comparar identidades sin distinguir
+ * mayúsculas ni espacios repetidos (espejo del índice lower() de la nube).
+ */
+export function normalizarNombreCliente(valor: string | null | undefined): string {
+  return (valor ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es')
+}
+
+/**
  * Normaliza un importe escrito en formato español de Colombia a una cadena
  * que `Number()` pueda interpretar. Reglas:
  * - El punto separa miles y la coma es el decimal ("1.250,50" -> "1250.50").
@@ -44,18 +52,30 @@ function normalizarSeparador(valor: string, separador: string): string {
   return valor.replace(separador, '.')
 }
 
+/** Máximo de decimales permitido en importes monetarios (espejo del edge). */
+export const MAX_DECIMALES_MONTO = 2
+
+function decimalesDeMonto(valorNormalizado: string): number {
+  const parte = valorNormalizado.split('.')[1]
+  return parte === undefined ? 0 : parte.length
+}
+
 /** Valida que un texto sea un número no negativo (importe monetario). */
 export function montoPositivo(valor: string, nombreCampo: string): string {
   const error = textoNoVacio(valor, nombreCampo)
   if (error) {
     return error
   }
-  const monto = Number(normalizarMonto(valor))
+  const normalizado = normalizarMonto(valor)
+  const monto = Number(normalizado)
   if (Number.isNaN(monto)) {
     return `El campo ${nombreCampo} debe contener un número válido.`
   }
   if (monto < 0) {
     return `El campo ${nombreCampo} debe ser un valor positivo.`
+  }
+  if (decimalesDeMonto(normalizado) > MAX_DECIMALES_MONTO) {
+    return `El campo ${nombreCampo} solo puede tener hasta ${MAX_DECIMALES_MONTO} decimales.`
   }
   return ''
 }

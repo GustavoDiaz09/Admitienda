@@ -16,6 +16,7 @@ import { Modal } from '../components/ui/Modal'
 import { Tabla, Celda, CeldaNumerica } from '../components/ui/Tabla'
 import { ConfirmButton } from '../components/ui/ConfirmButton'
 import { EncabezadoSeccion, Esqueleto, EstadoVacio } from '../components/ui/Base'
+import { ErrorDeCarga } from '../components/ui/ErrorDeCarga'
 import { AvisoInvitado } from '../components/layout/AppShell'
 
 import { estadoDeProducto } from '../lib/estadoProducto'
@@ -26,10 +27,15 @@ export function Productos() {
   const [productos, setProductos] = useState<Producto[] | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [edicion, setEdicion] = useState<Producto | null | 'nuevo'>(null)
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
-    const lista = await new ProductoController().obtenerProductos()
-    setProductos(lista)
+    try {
+      setProductos(await new ProductoController().obtenerProductos())
+      setErrorDeCarga(null)
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
+    }
     void actualizarConteoAlertas()
   }, [])
 
@@ -90,7 +96,9 @@ export function Productos() {
           )}
         </div>
 
-        {productos === null ? (
+        {productos === null && errorDeCarga ? (
+          <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargar()} />
+        ) : productos === null ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Esqueleto key={i} className="h-11 w-full" />
@@ -300,10 +308,10 @@ function FormularioProducto({
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Campo etiqueta="Cantidad en stock" htmlFor="prod-stock">
-            <Entrada id="prod-stock" inputMode="numeric" placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} required />
-          </Campo>
-          <Campo etiqueta="Stock mínimo" htmlFor="prod-stockmin" ayuda="Avisa cuando el stock esté por debajo.">
-            <Entrada id="prod-stockmin" inputMode="numeric" placeholder="0" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} required />
+<Entrada id="prod-stock" inputMode="numeric" min="0" placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} required />
+            </Campo>
+            <Campo etiqueta="Stock mínimo" htmlFor="prod-stockmin" ayuda="Avisa cuando el stock esté por debajo.">
+            <Entrada id="prod-stockmin" inputMode="numeric" min="0" placeholder="0" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} required />
           </Campo>
         </div>
         {error ? <AlertaDeError mensaje={error} /> : null}

@@ -9,14 +9,20 @@ import type { TablaSync } from '../model/types'
  * responde 401 y los datos quedan inaccesibles.
  */
 
-/** Resultado de una descarga completa: filas por tabla. */
-export type DescargaRemota = Record<string, Array<Record<string, unknown>>>
+/** Resultado de una descarga: `ahora` (reloj del servidor) + filas por tabla. */
+export interface DescargaRemota {
+  /** Epoch ms del reloj del servidor al responder (calibra el cursor). */
+  ahora: number
+  tablas: Record<string, Array<Record<string, unknown>>>
+}
 
 /**
  * Error del transporte hacia la nube. `estado` es el código HTTP de la
  * respuesta; `definitivo` indica que no tiene sentido reintentar: un 4xx
  * (payload inválido, conflicto de unicidad, llave, límites) nunca tendrá
  * éxito reenviándolo, mientras que un 5xx o un fallo de red son transitorios.
+ * El 408 (time-out), 425 (demasiado pronto) y 429 (límite de peticiones) se
+ * tratan como transitorios porque pueden resolverse reintentando después.
  */
 export class ErrorRemoto extends Error {
   readonly estado: number
@@ -26,7 +32,8 @@ export class ErrorRemoto extends Error {
     super(mensaje)
     this.name = 'ErrorRemoto'
     this.estado = estado
-    this.definitivo = estado >= 400 && estado < 500
+    const transitorio = estado === 408 || estado === 425 || estado === 429
+    this.definitivo = estado >= 400 && estado < 500 && !transitorio
   }
 }
 
@@ -94,16 +101,29 @@ export async function verificarRemoto(): Promise<boolean> {
 }
 
 /**
- * Descarga las filas de las 6 tablas. Si se pasa `desde` (epoch ms), solo
+ * Descarga las filas de todas las tablas. Si se pasa `desde` (epoch ms), solo
  * las modificadas después de esa marca (descarga incremental); sin `desde`
  * se descarga la base completa (restauración).
+ *
+ * La respuesta trae `ahora` (reloj del servidor) para calibrar el cursor, y
+ * las filas en `tablas`; por compatibilidad con el edge v11 (que respondía
+ * las tablas en la raíz), si el sobre no trae `ahora`/`tablas` se asume la
+ * forma antigua.
  */
 export async function descargarRemoto(desde?: number): Promise<DescargaRemota> {
   const datos = await llamar('descargar', undefined, desde ? { desde } : undefined)
   if (datos == null || typeof datos !== 'object') {
     throw new Error('La nube devolvió una respuesta inesperada al descargar.')
   }
-  return datos as DescargaRemota
+  const objeto = datos as Record<string, unknown>
+  if ('tablas' in objeto && typeof objeto.tablas === 'object' && objeto.tablas !== null) {
+    const ahora = Number(objeto.ahora ?? 0)
+    return {
+      ahora: Number.isFinite(ahora) && ahora > 0 ? ahora : 0,
+      tablas: objeto.tablas as Record<string, Array<Record<string, unknown>>>,
+    }
+  }
+  return { ahora: 0, tablas: objeto as Record<string, Array<Record<string, unknown>>> }
 }
 
 /** Sube un lote de filas de una tabla (para el outbox y "Subir todo"). */

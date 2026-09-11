@@ -8,6 +8,7 @@ import { FormAuthHeader } from '../components/auth/FormAuthHeader'
 import { Button } from '../components/ui/Button'
 import { Campo, Entrada, AlertaDeError } from '../components/ui/Campo'
 import { avisarExito } from '../lib/toast'
+import { formatearEspera } from '../lib/intentos'
 
 /** Flujo de recuperación de contraseña por indicio de seguridad (3 pasos). */
 export function RecuperarContrasena() {
@@ -44,8 +45,20 @@ export function RecuperarContrasena() {
     setCargando(true)
     try {
       const controlador = new UsuarioController()
+      const bloqueoInicial = await controlador.consultarBloqueoDeIndicio(nombre)
+      if (bloqueoInicial.bloqueado) {
+        setError(
+          `Demasiados intentos fallidos. Vuelva a intentarlo en ${formatearEspera(bloqueoInicial.esperaRestanteMs)}.`,
+        )
+        return
+      }
       if (!(await controlador.verificarIndicio(nombre, indicio))) {
-        setError('El indicio no es correcto o el usuario no existe.')
+        const bloqueo = await controlador.consultarBloqueoDeIndicio(nombre)
+        setError(
+          bloqueo.bloqueado
+            ? `Demasiados intentos fallidos. Vuelva a intentarlo en ${formatearEspera(bloqueo.esperaRestanteMs)}.`
+            : 'El indicio no es correcto o el usuario no existe.',
+        )
         return
       }
       setPaso(3)

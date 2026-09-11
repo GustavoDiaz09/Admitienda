@@ -1,9 +1,10 @@
 import type { Deuda, PagoDeuda } from '../model/types'
 import { DeudaDao } from '../dao/DeudaDao'
 import { PagoDeudaDao } from '../dao/PagoDeudaDao'
+import { DeudorDao } from '../dao/DeudorDao'
 import { MovimientoDao } from '../dao/MovimientoDao'
 import { Resultado } from './Resultado'
-import { aDouble, acumularErrores, montoPositivo, textoNoVacio } from '../lib/validaciones'
+import { aDouble, acumularErrores, montoPositivo, normalizarNombreCliente, textoNoVacio } from '../lib/validaciones'
 import { formatFecha } from '../lib/fecha'
 import { moneda } from '../lib/formato'
 import { db } from '../lib/db'
@@ -13,14 +14,23 @@ import { TIPO_INGRESO } from '../model/types'
 
 /**
  * Controlador del CRM de deudas: registro de ventas fiadas y sus abonos.
- * Cada abono registra además un ingreso en la caja (movimientos).
+ * Cada abono registra además un ingreso en la caja (movimientos). Los
+ * deudores son identidades únicas por nombre normalizado: registrar varias
+ * veces al mismo cliente reutiliza su cartera y permite varias deudas
+ * pendientes a la vez.
  */
 export class DeudaController {
   private readonly deudaDao = new DeudaDao()
   private readonly pagoDao = new PagoDeudaDao()
+  private readonly deudorDao = new DeudorDao()
   private readonly movimientoDao = new MovimientoDao()
 
-  /** Registra una deuda nueva de un cliente (venta fiada). */
+  /**
+   * Registra una deuda nueva de un cliente (venta fiada). Resuelve el
+   * deudor por nombre normalizado: si ya existe se reutiliza (mismo
+   * historial) y si no se crea, dentro de una misma transacción Dexie
+   * (deudor + deuda + outbox): o quedan ambas, o ninguna.
+   */
   async registrarDeuda(
     clienteNombre: string,
     monto: string,
@@ -36,13 +46,91 @@ export class DeudaController {
       }
       return Resultado.error(errores.join('\n'))
     }
-    await this.deudaDao.insertar({
-      cliente_nombre: clienteNombre.trim(),
-      monto: aDouble(monto),
-      descripcion: descripcion.trim(),
-      fecha: formatFecha(new Date()),
-    })
+
+    const contexto = {
+      silencioso: true,
+      dispositivo: await obtenerDispositivoId(),
+    }
+    try {
+      await db.transaction(
+        'rw',
+        [db.deudores, db.deudas, db.outbox],
+        async () => {
+          const normalizado = normalizarNombreCliente(clienteNombre)
+          let deudor = await this.deudorDao.buscarPorNombreNormalizado(normalizado)
+          if (!deudor) {
+            try {
+              deudor = await this.deudorDao.insertar(
+                {
+                  nombre_deudor: clienteNombre.trim(),
+                  nombre_normalizado: normalizado,
+                },
+                { ...contexto, ahora: Date.now() },
+              )
+            } catch {
+              // Pudo crearse desde otro flujo concurrente justo antes:
+              // se reverifica para reutilizar la misma identidad.
+              deudor = await this.deudorDao.buscarPorNombreNormalizado(normalizado)
+            }
+          }
+          if (!deudor) {
+            throw new Error('No se pudo identificar al deudor.')
+          }
+          await this.deudaDao.insertar(
+            {
+              deudor_id: deudor.id,
+              cliente_nombre: deudor.nombre_deudor,
+              monto: aDouble(monto),
+              descripcion: descripcion.trim(),
+              fecha: formatFecha(new Date()),
+            },
+            { ...contexto, ahora: Date.now() },
+          )
+        },
+      )
+    } catch (error) {
+      return Resultado.error(error instanceof Error ? error.message : 'No se pudo registrar la deuda.')
+    }
+    void sincronizarAhora()
     return Resultado.exito('Deuda registrada correctamente.')
+  }
+
+  /**
+   * Edita el valor y la descripción de una deuda (el nombre del deudor
+   * queda fijo). El saldo se recalcula conservando lo ya abonado:
+   * `saldo = montoNuevo − (montoAnterior − saldoAnterior)`.
+   */
+  async editarDeuda(
+    idDeDeuda: string,
+    monto: string,
+    descripcion: string,
+  ): Promise<Resultado> {
+    const errores: string[] = []
+    acumularErrores(errores, montoPositivo(monto, 'monto'))
+    acumularErrores(errores, textoNoVacio(descripcion, 'descripción'))
+    if (errores.length > 0 || aDouble(monto) <= 0) {
+      if (errores.length === 0) {
+        errores.push('El monto de la deuda debe ser mayor a 0.')
+      }
+      return Resultado.error(errores.join('\n'))
+    }
+    const deuda = await this.deudaDao.buscarPorId(idDeDeuda)
+    if (!deuda) {
+      return Resultado.error('La deuda no existe o ya fue eliminada.')
+    }
+    const montoNuevo = aDouble(monto)
+    const abonado = deuda.monto - deuda.saldo
+    const nuevoSaldo = montoNuevo - abonado
+    if (nuevoSaldo < 0) {
+      return Resultado.error(`El monto no puede ser menor que lo ya abonado (${moneda(abonado)}).`)
+    }
+    await this.deudaDao.actualizar({
+      ...deuda,
+      monto: montoNuevo,
+      saldo: nuevoSaldo,
+      descripcion: descripcion.trim(),
+    })
+    return Resultado.exito('Deuda actualizada correctamente.')
   }
 
   /**

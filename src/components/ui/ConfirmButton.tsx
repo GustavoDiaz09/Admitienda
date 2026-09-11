@@ -13,6 +13,7 @@ interface Props {
   variante?: 'peligro' | 'secundario'
   tamanio?: 'sm' | 'md'
   icono?: ComponentType<{ size?: number; weight?: 'bold' | 'regular' | 'fill' }>
+  ariaLabel?: string
   disabled?: boolean
   className?: string
 }
@@ -29,6 +30,7 @@ export function ConfirmButton({
   variante = 'peligro',
   tamanio = 'sm',
   icono: Icono,
+  ariaLabel,
   disabled,
   className,
 }: Props) {
@@ -52,6 +54,7 @@ export function ConfirmButton({
         tamanio={tamanio}
         icono={Icono}
         disabled={disabled}
+        aria-label={ariaLabel ?? titulo}
         className={className}
         onClick={() => setAbierto(true)}
       >

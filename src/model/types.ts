@@ -27,6 +27,7 @@ export type TablaSync =
   | 'productos'
   | 'movimientos'
   | 'solicitudes_admin'
+  | 'deudores'
   | 'deudas'
   | 'pagos_deuda'
 
@@ -100,11 +101,24 @@ export interface SolicitudAdmin extends RegistroBase {
 }
 
 /**
+ * Deudor (cliente que compra fiado). Identidad única en la base por nombre
+ * normalizado (sin mayúsculas ni espacios repetidos): una sola entidad por
+ * nombre, con todas sus ventas fiadas agrupadas en el historial. Las deudas
+ * del mismo deudor pueden ser varias y simultáneas (decide el tendero).
+ */
+export interface Deudor extends RegistroBase {
+  nombre_deudor: string
+  /** Nombre en minúsculas y con espacios colapsados (clave de unicidad). */
+  nombre_normalizado: string
+}
+
+/**
  * Deuda de un cliente (venta fiada). El `monto` es el total original y
  * `saldo` lo que aún falta por pagar; cuando `saldo` llega a 0 la deuda
- * se considera saldada.
+ * se considera saldada. `deudor_id` enlaza la deuda con su deudor único.
  */
 export interface Deuda extends RegistroBase {
+  deudor_id: string
   cliente_nombre: string
   monto: number
   saldo: number

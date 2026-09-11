@@ -39,6 +39,15 @@ describe('Validación de montos', () => {
     expect(montoPositivo('1.000.000,00', 'monto')).toBe('')
   })
 
+  it('rechaza importes con más de dos decimales (espejo de la nube)', () => {
+    expect(montoPositivo('1,2345', 'monto')).toContain('2 decimales')
+    expect(montoPositivo('1.250,505', 'monto')).toContain('2 decimales')
+    expect(montoPositivo('1.000,005', 'monto')).toContain('2 decimales')
+    expect(montoPositivo('1,23', 'monto')).toBe('')
+    expect(montoPositivo('100.00', 'monto')).toBe('')
+    expect(montoPositivo('5.000', 'monto')).toBe('')
+  })
+
   it('valida enteros no negativos', () => {
     expect(enteroNoNegativo('100', 'stock')).toBe('')
     expect(enteroNoNegativo('10,5', 'stock')).not.toBe('')

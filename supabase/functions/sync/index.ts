@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { primerCampoInvalido } from './esquemas.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const CLAVE_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -8,6 +9,7 @@ const TABLAS = [
   'productos',
   'movimientos',
   'solicitudes_admin',
+  'deudores',
   'deudas',
   'pagos_deuda',
 ]
@@ -76,112 +78,18 @@ function jsonDatos(status: number, cuerpo: unknown): Response {
 // ---------------------------------------------------------------------------
 // Validación de la carga útil de `subir`. La nube es la fuente compartida que
 // cada dispositivo fusiona (LWW), así que nada basura debe poder escribir.
-// Espejo de las reglas de negocio del cliente: tipos, rangos, enumerados y
-// formato de fechas; además solo se aceptan las columnas conocidas de cada
-// tabla (allow-list) y lotes de tamaño acotado.
+// Los esquemas y validadores viven en `esquemas.ts` (compartidos con los
+// tests de la aplicación); aquí se aplican además los límites de tamaño y
+// el conteo máximo de filas por lote.
 // ---------------------------------------------------------------------------
 
 const MAX_FILAS = 2000
 const MAX_TAMANO_CUERPO = 2_000_000
 
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
-const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
-
-function esUuid(v: unknown): boolean {
-  return typeof v === 'string' && UUID_REGEX.test(v)
-}
-
-function esNumeroFinito(v: unknown): boolean {
-  return typeof v === 'number' && Number.isFinite(v)
-}
-
-function esTexto(v: unknown, max: number): boolean {
-  return typeof v === 'string' && v.length > 0 && v.length <= max
-}
-
-/** Decimales <= 2 en montos (evita 0.1+0.2 y valores absurdos). */
-function esMonto(v: unknown): boolean {
-  return esNumeroFinito(v) && v >= 0 && Number.isInteger(Math.round(v * 100))
-}
-
-const ESQUEMAS: Record<string, Record<string, (v: unknown) => boolean>> = {
-  usuarios: {
-    nombre_usuario: (v) => esTexto(v, 50),
-    tipo_usuario: (v) => v === 'ADMIN' || v === 'REGISTRADO',
-    contrasena_hash: (v) => esTexto(v, 200),
-    salt: (v) => esTexto(v, 64),
-    indicio_usuario: (v) => esTexto(v, 100),
-    fecha_registro: (v) => esTexto(v, 19) && FECHA_REGEX.test(String(v)),
-  },
-  productos: {
-    tipo_producto: (v) => esTexto(v, 100),
-    nombre_producto: (v) => esTexto(v, 100),
-    precio_neto: esMonto,
-    ganancia: esMonto,
-    precio_venta: esMonto,
-    cantidad_stock: (v) => esNumeroFinito(v) && Number.isInteger(v) && v >= 0,
-    stock_minimo: (v) => esNumeroFinito(v) && Number.isInteger(v) && v >= 0,
-  },
-  movimientos: {
-    tipo_movimiento: (v) => v === 'INGRESO' || v === 'EGRESO',
-    monto: esMonto,
-    descripcion: (v) => esTexto(v, 400),
-    fecha: (v) => esTexto(v, 19) && FECHA_REGEX.test(String(v)),
-  },
-  solicitudes_admin: {
-    usuario_id: esUuid,
-    estado: (v) => v === 'PENDIENTE' || v === 'APROBADA' || v === 'RECHAZADA',
-    fecha_solicitud: (v) => esTexto(v, 19) && FECHA_REGEX.test(String(v)),
-  },
-  deudas: {
-    cliente_nombre: (v) => esTexto(v, 100),
-    monto: esMonto,
-    descripcion: (v) => esTexto(v, 400),
-    fecha: (v) => esTexto(v, 19) && FECHA_REGEX.test(String(v)),
-  },
-  pagos_deuda: {
-    deuda_id: esUuid,
-    monto: esMonto,
-    descripcion: (v) => esTexto(v, 400),
-    fecha: (v) => esTexto(v, 19) && FECHA_REGEX.test(String(v)),
-  },
-}
-
-/** Devuelve el primer campo inválido de una fila, o null si es válida. */
-function primerCampoInvalido(tabla: string, fila: Record<string, unknown>): string | null {
-  const validador = ESQUEMAS[tabla]
-  if (!validador) {
-    return '(tabla desconocida)'
-  }
-  const camposPorDefecto = [
-    ['id', esUuid],
-    ['creado_en', esNumeroFinito],
-    ['actualizado_en', esNumeroFinito],
-    ['version', (v: unknown) => esNumeroFinito(v) && Number.isInteger(v) && v >= 1],
-    ['eliminado', (v: unknown) => v === true || v === false],
-    ['dispositivo', (v: unknown) => esTexto(v, 64)],
-  ] as const
-  const permitidos = new Set(['id', 'creado_en', 'actualizado_en', 'version', 'eliminado', 'dispositivo', ...Object.keys(validador)])
-  for (const campo of Object.keys(fila)) {
-    if (!permitidos.has(campo)) {
-      return `columna no permitida '${campo}'`
-    }
-  }
-  for (const [campo, comprobar] of camposPorDefecto) {
-    if (!comprobar(fila[campo])) {
-      return campo
-    }
-  }
-  // Campos de negocio. Las tumbas también los conservan (las columnas son
-  // NOT NULL), así que se validan igual que las filas activas.
-  for (const [campo, comprobar] of Object.entries(validador)) {
-    if (!comprobar(fila[campo])) {
-      return campo
-    }
-  }
-  return null
-}
+// Límites de `descargar`: un respaldo completo se acumula en memoria antes de
+// responder, así que se acota el número total de filas para no agotar el
+// isolate (546 WORKER_RESOURCE_LIMIT) en bases grandes.
+const MAX_FILAS_DESCARGAR = 50_000
 
 Deno.serve(async (req) => {
   try {
@@ -207,7 +115,8 @@ Deno.serve(async (req) => {
         .select('id', { count: 'exact', head: true })
         .eq('tipo_usuario', 'ADMIN')
       if (error) {
-        return jsonDatos(500, { error: `No se pudo consultar: ${error.message}` })
+        console.error('hay_admin:', error.message)
+        return jsonDatos(500, { error: 'No se pudo consultar el estado de administradores.' })
       }
       return jsonDatos(200, { hay: (count ?? 0) > 0 })
     }
@@ -220,6 +129,7 @@ Deno.serve(async (req) => {
       const desde = Number(desdeTexto)
       const usarDesde = Number.isFinite(desde) && desde > 0
       const tablas: Record<string, unknown[]> = {}
+      let totalFilas = 0
       for (const tabla of TABLAS) {
         const filas: unknown[] = []
         const TAMANO_LOTE = 1000
@@ -233,9 +143,18 @@ Deno.serve(async (req) => {
             .order('id', { ascending: true })
             .range(inicio, inicio + TAMANO_LOTE - 1)
           if (error) {
-            return jsonDatos(500, { error: `No se pudo descargar ${tabla}: ${error.message}` })
+            console.error(`descargar ${tabla}:`, error.message)
+            return jsonDatos(500, { error: 'No se pudo descargar la información desde la nube.' })
           }
           const lote = data ?? []
+          totalFilas += lote.length
+          if (totalFilas > MAX_FILAS_DESCARGAR) {
+            return jsonDatos(413, {
+              error:
+                `La descarga supera el límite de ${MAX_FILAS_DESCARGAR} filas. ` +
+                'Reduzca el volumen de datos en la nube o sincronice de nuevo más tarde.',
+            })
+          }
           filas.push(...lote)
           if (lote.length < TAMANO_LOTE) {
             break
@@ -244,7 +163,9 @@ Deno.serve(async (req) => {
         }
         tablas[tabla] = filas
       }
-      return jsonDatos(200, tablas)
+      // El sobre incluye `ahora` (reloj del servidor) para que el cliente
+      // calibre su cursor incremental sin depender del reloj local.
+      return jsonDatos(200, { ahora: Date.now(), tablas })
     }
 
     if (accion === 'subir') {
@@ -289,10 +210,13 @@ Deno.serve(async (req) => {
         const esConflicto =
           typeof error.code === 'string' &&
           (error.code === '23505' || error.code.startsWith('23P'))
+        if (!esConflicto) {
+          console.error(`subir ${cuerpo.tabla}:`, error.message)
+        }
         return jsonDatos(esConflicto ? 409 : 500, {
           error: esConflicto
             ? 'Ya existe un registro con el mismo nombre en la nube (conflicto de unicidad).'
-            : `No se pudo guardar: ${error.message}`,
+            : 'No se pudo guardar en la nube. Intente de nuevo más tarde.',
         })
       }
       return jsonDatos(200, { ok: true, subidas: cuerpo.filas.length })
@@ -300,8 +224,7 @@ Deno.serve(async (req) => {
 
     return jsonDatos(400, { error: 'Acción desconocida.' })
   } catch (error) {
-    return jsonDatos(500, {
-      error: 'Excepción interna: ' + (error instanceof Error ? error.message : String(error)),
-    })
+    console.error('sync:', error instanceof Error ? error.message : String(error))
+    return jsonDatos(500, { error: 'Error interno del servicio de sincronización.' })
   }
 })

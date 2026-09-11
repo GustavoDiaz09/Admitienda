@@ -10,6 +10,7 @@ export const TABLAS: TablaSync[] = [
   'productos',
   'movimientos',
   'solicitudes_admin',
+  'deudores',
   'deudas',
   'pagos_deuda',
 ]
@@ -25,8 +26,28 @@ interface ResultadoPull {
 /** Clave del metadato que guarda la marca desde la que se bajó la nube. */
 const CLAVE_CURSOR = 'ultima_descarga'
 
+/** Clave del metadato que guarda cuándo toca un rescaneo completo. */
+const CLAVE_RESCAN = 'proxima_descarga_completa'
+
 /** Tamaño de lote para descargas y para subir la base completa. */
 const TAMANO_LOTE = 1000
+
+/**
+ * Margen de seguridad del cursor incremental. El cursor se ancla al reloj del
+ * servidor (no al local) menos este margen: así toda fila escrita durante la
+ * bajada qaeda por encima del cursor y se repite en el ciclo siguiente (la
+ * fusión LWW es idempotente), y un reloj local adelantado ya no puede dejar
+ * la bajada congelada para siempre.
+ */
+const MARGEN_CURSOR_MS = 5 * 60 * 1000
+
+/**
+ * Cadencia del rescaneo completo de seguridad. Las filas escritas por un
+ * dispositivo con reloj atrasado quedan con `actualizado_en` antiguo y el
+ * filtro incremental nunca las vuelve a ver; cada 24 h se fuerza una baja
+ * completa que las recupera de manera eventual.
+ */
+const INTERVALO_RESCAN_MS = 24 * 60 * 60 * 1000
 
 /**
  * Marca de tiempo (epoch ms) de la última descarga exitosa. Se usa como
@@ -40,6 +61,17 @@ export async function obtenerCursorDescarga(): Promise<number> {
 /** Persiste el cursor de descarga tras una bajada exitosa. */
 export async function guardarCursorDescarga(marcaTiempo: number): Promise<void> {
   await db.metadatos.put({ clave: CLAVE_CURSOR, valor: String(marcaTiempo) })
+}
+
+/** Epoch ms de cuándo toca un rescaneo completo (0 si aún nunca se corrió). */
+export async function obtenerProximaDescargaCompleta(): Promise<number> {
+  const fila = await db.metadatos.get(CLAVE_RESCAN)
+  return fila ? Number(fila.valor) || 0 : 0
+}
+
+/** Programa el próximo rescaneo completo de seguridad. */
+export async function programarProximaDescargaCompleta(marcaTiempo: number): Promise<void> {
+  await db.metadatos.put({ clave: CLAVE_RESCAN, valor: String(marcaTiempo) })
 }
 
 /** Convierte una fila de la nube (nombres con guion bajo) a registro local. */
@@ -73,6 +105,8 @@ function tablaDexie(tabla: TablaSync) {
       return db.movimientos
     case 'solicitudes_admin':
       return db.solicitudes_admin
+    case 'deudores':
+      return db.deudores
     case 'deudas':
       return db.deudas
     case 'pagos_deuda':
@@ -153,9 +187,11 @@ export async function traerDatosDelServidor(
   store.setError(null)
 
   const cursor = await obtenerCursorDescarga()
-  const desde = opciones.completo || cursor === 0 ? undefined : cursor
-  const inicioDeDescarga = Date.now()
-  const tablas = await descargarRemoto(desde)
+  const proximaCompleta = await obtenerProximaDescargaCompleta()
+  const tocaRescan = proximaCompleta > 0 && proximaCompleta <= Date.now()
+  const desde = opciones.completo || cursor === 0 || tocaRescan ? undefined : cursor
+  const descarga = await descargarRemoto(desde)
+  const tablas = descarga.tablas
   for (const tabla of TABLAS) {
     const remotos = (tablas[tabla] ?? []) as Array<Record<string, unknown>>
     const aplicados = await aplicarRemotos(tabla, remotos)
@@ -167,10 +203,21 @@ export async function traerDatosDelServidor(
     }
     resultado.tablas++
   }
-  // El cursor avanza a la marca de inicio de esta descarga, no a la de fin:
-  // cualquier fila tocada durante la bajada queda > cursor y se repetirá en
-  // el siguiente ciclo (la fusión LWW es idempotente).
-  await guardarCursorDescarga(inicioDeDescarga)
+  // El cursor se deriva del reloj del servidor (`ahora` del sobre, con un
+  // margen de seguridad), no del reloj local: un reloj local adelantado ya
+  // no puede dejar la bajada congelada para siempre, y uno atrasado deja de
+  // re-descargar casi toda la base en cada ciclo. Restar el margen hace que
+  // toda fila escrita durante la bajada quede por encima del cursor y se
+  // repita en el siguiente ciclo (la fusión LWW es idempotente).
+  const baseDeReloj = descarga.ahora > 0 ? descarga.ahora : Date.now()
+  await guardarCursorDescarga(Math.max(baseDeReloj - MARGEN_CURSOR_MS, 0))
+  // Tras toda bajada completa (primera vez, manual o rescaneo de seguridad
+  // vencido) se programa el siguiente rescaneo desde el reloj del servidor.
+  // Recupera eventualmente las filas escritas por dispositivos con reloj
+  // atrasado, que el filtro incremental nunca volvería a ver.
+  if (cursor === 0 || tocaRescan || opciones.completo) {
+    await programarProximaDescargaCompleta(baseDeReloj + INTERVALO_RESCAN_MS)
+  }
   await refrescarPendientes()
   const pendientes = await contarPendientes()
   if (pendientes > 0) {
@@ -249,8 +296,14 @@ function filaExtra(tabla: TablaSync, r: RegistroBase): Record<string, unknown> {
         estado: registro.estado,
         fecha_solicitud: registro.fecha_solicitud,
       }
+    case 'deudores':
+      return {
+        nombre_deudor: registro.nombre_deudor,
+        nombre_normalizado: registro.nombre_normalizado,
+      }
     case 'deudas':
       return {
+        deudor_id: registro.deudor_id,
         cliente_nombre: registro.cliente_nombre,
         monto: registro.monto,
         saldo: registro.saldo,

@@ -9,18 +9,23 @@ import { Card } from '../components/ui/Card'
 import { Tabla, Celda, CeldaNumerica } from '../components/ui/Tabla'
 import { Insignia } from '../components/ui/Insignia'
 import { EncabezadoSeccion, Esqueleto, EstadoVacio } from '../components/ui/Base'
+import { ErrorDeCarga } from '../components/ui/ErrorDeCarga'
 import { estadoDeProducto } from '../lib/estadoProducto'
 
 /** Alertas de inventario: productos por debajo de su stock mínimo (admin). */
 export function Alertas() {
   const [productos, setProductos] = useState<Producto[] | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     setCargando(true)
     try {
       setProductos(await new ProductoController().obtenerStockBajo())
+      setErrorDeCarga(null)
       void actualizarConteoAlertas()
+    } catch {
+      setErrorDeCarga('No se pudo cargar la información. Intente de nuevo.')
     } finally {
       setCargando(false)
     }
@@ -56,7 +61,9 @@ export function Alertas() {
       />
 
       <Card>
-        {productos === null ? (
+        {productos === null && errorDeCarga ? (
+          <ErrorDeCarga mensaje={errorDeCarga} alReintentar={() => void cargar()} />
+        ) : productos === null ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Esqueleto key={i} className="h-11 w-full" />
