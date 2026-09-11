@@ -14,7 +14,7 @@ import { TIPO_ADMIN } from '../../model/types'
 import { horaCorta } from '../../lib/formato'
 import { avisarExito, avisarError } from '../../lib/toast'
 import { obtenerLlave, guardarLlave, hayLlaveConfigurada, enlaceDeLlave } from '../../lib/llave'
-import { crearLlaveRemoto } from '../../lib/remoto'
+import { crearLlaveRemoto, ErrorRemoto } from '../../lib/remoto'
 import { ejecutarAccionDeSync, type TipoAccionSync } from '../../lib/syncAcciones'
 import { refrescarPendientes, sincronizarAhora, useSyncStore } from '../../sync/syncEngine'
 import {
@@ -104,7 +104,15 @@ export function SyncIndicator() {
       }
       setPasoOnboarding('resultado')
     } catch (causa) {
-      setErrorGenerar(causa instanceof Error ? causa.message : 'No se pudo crear la llave.')
+      if (causa instanceof ErrorRemoto && causa.estado === 401 && !hayLlaveConfigurada()) {
+        setErrorGenerar(
+          'Hay llaves en la nube y un dispositivo nuevo no puede generar otra por sí solo. ' +
+            'Pida al administrador la llave de sincronización (o escanee el enlace/QR que le comparta) ' +
+            'y péguela en el campo de la llave.',
+        )
+      } else {
+        setErrorGenerar(causa instanceof Error ? causa.message : 'No se pudo crear la llave.')
+      }
       setPasoOnboarding('confirmar')
     }
   }
@@ -366,9 +374,10 @@ export function SyncIndicator() {
                     </>
                   ) : (
                     <>
-                      Esta será la <strong>primera llave de la tienda</strong> y dejará
-                      configurado este dispositivo. Quien la tenga puede respaldar y
-                      descargar todos los datos en la nube.
+                      Si la nube aún no tiene llaves, esta será la <strong>primera llave de la
+                      tienda</strong> y dejará configurado este dispositivo. Si ya existen llaves,
+                      solo el administrador puede generar una nueva y debe compartírtela por el
+                      enlace/QR (no es posible crear una sin tener la llave actual).
                     </>
                   )}
                 </p>
