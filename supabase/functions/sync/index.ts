@@ -46,16 +46,26 @@ async function hashDeLlave(llave: string, salt: string, iteraciones: number): Pr
   return aHex(new Uint8Array(bits))
 }
 
-async function llaveValida(
+interface LlaveHallada {
+  valida: boolean
+  /** `true` si corresponde a la llave del dueño (SUPERADMIN): solo las llaves
+   *  maestras pueden crear llaves para nuevos dispositivos. */
+  maestra: boolean
+}
+
+async function hallarLlave(
   supabase: ReturnType<typeof createClient>,
   llave: string,
-): Promise<boolean> {
+): Promise<LlaveHallada> {
+  const noHallada: LlaveHallada = { valida: false, maestra: false }
   if (!llave) {
-    return false
+    return noHallada
   }
-  const { data, error } = await supabase.from('llaves_sincronizacion').select('llave_salt, llave_hash')
+  const { data, error } = await supabase
+    .from('llaves_sincronizacion')
+    .select('llave_salt, llave_hash, es_llave_maestra')
   if (error || !data) {
-    return false
+    return noHallada
   }
   for (const fila of data) {
     const hashGuardado = String(fila.llave_hash ?? '')
@@ -69,10 +79,10 @@ async function llaveValida(
     }
     const calculado = await hashDeLlave(llave, String(fila.llave_salt ?? ''), iteraciones)
     if (calculado === hashHex.toLowerCase()) {
-      return true
+      return { valida: true, maestra: fila.es_llave_maestra === true }
     }
   }
-  return false
+  return noHallada
 }
 
 function jsonDatos(status: number, cuerpo: unknown): Response {
@@ -111,7 +121,7 @@ const MAX_TAMANO_CUERPO = 2_000_000
 const MAX_FILAS_DESCARGAR = 50_000
 
 // Iteraciones de PBKDF2 para las llaves de sincronización (mismas que usa la
-// app para las contraseñas y que el explorador de `llaveValida`).
+// app para las contraseñas y que el explorador de `hallarLlave`).
 const ITERACIONES_LLAVE = 210_000
 
 // ---------------------------------------------------------------------------
@@ -166,18 +176,23 @@ function leerNombreDeCuerpo(cuerpo: unknown): string {
 /**
  * Crea una llave de sincronización nueva con nombre opcional y devuelve la
  * llave en claro (solo se devuelve una vez; la nube guarda salt + hash).
- * Lo usan `crear_llave` y el auto-enrolamiento del SUPERADMIN en `login`.
+ * `esMaestra` marca la llave del dueño (SUPERADMIN): solo las maestras pueden
+ * crear llaves para nuevos dispositivos. Lo usan `crear_llave` (arranque →
+ * maestra; alta de dispositivo → subordinada) y el auto-enrolamiento del
+ * SUPERADMIN en `login` (siempre maestra).
  */
 async function crearLlaveEnServidor(
   supabase: ReturnType<typeof createClient>,
   nombre?: string,
+  esMaestra = false,
 ): Promise<string> {
   const llaveNueva = aleatorioHex(24)
   const salt = aleatorioHex(32)
   const hash = await hashDeLlave(llaveNueva, salt, ITERACIONES_LLAVE)
-  const fila: Record<string, string> = {
+  const fila: Record<string, unknown> = {
     llave_salt: salt,
     llave_hash: `pbkdf2$${ITERACIONES_LLAVE}$${hash}`,
+    es_llave_maestra: esMaestra,
   }
   if (nombre) {
     fila.nombre = nombre
@@ -192,9 +207,11 @@ async function crearLlaveEnServidor(
 /**
  * Crea una llave de sincronización nueva. Sin ninguna llave guardada en la
  * nube actúa como "arranque" (el primer dispositivo la genera sin necesidad
- * de otra); en cualquier otro caso exige una llave vigente (solo quien ya
- * posee una puede habilitar otro dispositivo). La llave en claro se devuelve
- * una única vez en la respuesta y nunca se guarda.
+ * de otra y queda como llave maestra del dueño); en cualquier otro caso exige
+ * una llave maestra vigente (solo el SUPERADMIN, cuyo dispositivo posee una
+ * llave maestra, puede habilitar otro dispositivo) y devuelve una llave
+ * subordinada. La llave en claro se devuelve una única vez en la respuesta y
+ * nunca se guarda.
  */
 async function manejarCrearLlave(
   supabase: ReturnType<typeof createClient>,
@@ -210,8 +227,14 @@ async function manejarCrearLlave(
   const totalLlaves = count ?? 0
   if (totalLlaves > 0) {
     const llaveActual = req.headers.get('x-llave-sincronizacion') ?? ''
-    if (!(await llaveValida(supabase, llaveActual))) {
+    const { valida, maestra } = await hallarLlave(supabase, llaveActual)
+    if (!valida) {
       return jsonDatos(401, { error: 'Llave de sincronización inválida.' })
+    }
+    if (!maestra) {
+      return jsonDatos(403, {
+        error: 'Solo la llave del administrador (SUPERADMIN) puede crear llaves para nuevos dispositivos.',
+      })
     }
   }
 
@@ -225,8 +248,11 @@ async function manejarCrearLlave(
   }
 
   try {
-    const llaveNueva = await crearLlaveEnServidor(supabase, nombre)
-    return jsonDatos(200, { llave: llaveNueva, inicial: totalLlaves === 0 })
+    // Arranque (sin llaves) → la primera llave es maestra; alta de un
+    // dispositivo → llave subordinada.
+    const esMaestra = totalLlaves === 0
+    const llaveNueva = await crearLlaveEnServidor(supabase, nombre, esMaestra)
+    return jsonDatos(200, { llave: llaveNueva, inicial: esMaestra })
   } catch (error) {
     console.error('crear_llave:', error instanceof Error ? error.message : String(error))
     return jsonDatos(500, { error: 'No se pudo crear la llave de sincronización.' })
@@ -292,13 +318,16 @@ async function manejarLogin(
 
   let llaveNueva: string | undefined
   const llaveRecibida = req.headers.get('x-llave-sincronizacion') ?? ''
-  const trajoLlaveValida = llaveRecibida !== '' && (await llaveValida(supabase, llaveRecibida))
+  const trajoLlaveValida =
+    llaveRecibida !== '' && (await hallarLlave(supabase, llaveRecibida)).valida
   const esSuperadmin =
     String(fila.tipo_usuario ?? '') === 'SUPERADMIN' &&
     String(fila.nombre_usuario ?? '') === NOMBRE_SUPERADMIN
   if (esSuperadmin && !trajoLlaveValida) {
     try {
-      llaveNueva = await crearLlaveEnServidor(supabase, 'Auto-enrolamiento (SUPERADMIN)')
+      // La llave de un dispositivo del dueño es maestra: también puede crear
+      // llaves para otros dispositivos.
+      llaveNueva = await crearLlaveEnServidor(supabase, 'Auto-enrolamiento (SUPERADMIN)', true)
     } catch (errorError) {
       console.error(
         'login auto-enrolamiento:',
@@ -337,7 +366,7 @@ Deno.serve(async (req) => {
     }
 
     const llave = req.headers.get('x-llave-sincronizacion') ?? ''
-    if (!(await llaveValida(supabase, llave))) {
+    if (!(await hallarLlave(supabase, llave)).valida) {
       return jsonDatos(401, { error: 'Llave de sincronización inválida.' })
     }
 

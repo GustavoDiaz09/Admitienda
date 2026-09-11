@@ -163,13 +163,16 @@ alter table public.deudas alter column deudor_id set not null;
 -- ============================================================
 -- llaves_sincronizacion (llave única por dispositivo que valida la Edge
 -- Function `sync`). `llave_hash` = pbkdf2$<iter>$<hex> de (llave + salt);
--- la llave en claro no se guarda en ningún lado.
+-- la llave en claro no se guarda en ningún lado. `es_llave_maestra` marca
+-- la llave del dueño (SUPERADMIN): solo las maestras pueden crear llaves
+-- para nuevos dispositivos; las subordinadas sincronizan pero no crean.
 -- ============================================================
 create table if not exists public.llaves_sincronizacion (
   id uuid primary key default gen_random_uuid(),
   nombre text not null default 'Dispositivo',
   llave_salt text not null,
   llave_hash text not null unique,
+  es_llave_maestra boolean not null default false,
   fecha_creacion date not null default current_date
 );
 

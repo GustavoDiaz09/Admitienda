@@ -4,6 +4,8 @@ import { avisarError, avisarExito } from '../../lib/toast'
 import { obtenerLlave, hayLlaveConfigurada, enlaceDeLlave } from '../../lib/llave'
 import { crearLlaveRemoto, ErrorRemoto } from '../../lib/remoto'
 import { configurarLlaveYSincronizar } from '../../lib/syncAcciones'
+import { useSesionStore } from '../../controller/SessionController'
+import { esSuperadmin, NOMBRE_SUPERADMIN } from '../../model/types'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 
@@ -11,9 +13,9 @@ import { Modal } from '../ui/Modal'
  * Configuración de la llave de sincronización de un dispositivo: campo para
  * pegar la llave (Guardar dispara la subida y la bajada) y el flujo de alta
  * de llaves (Generar / Agregar dispositivo) con su modal de QR y enlace.
- * Se usa tanto dentro del panel de sincronización (sesión) como en la
- * pantalla de Login sin sesión, para romper el círculo
- * llave -> datos -> login en un dispositivo nuevo.
+ * Se usa en el panel de sincronización (sesión iniciada). Generar una llave
+ * solo lo puede hacer el SUPERADMIN (el dueño); cualquier otro usuario solo
+ * puede pegar la llave que el administrador le comparta.
  */
 export function PanelLlaveSincronizacion() {
   const [llaveTexto, setLlaveTexto] = useState(obtenerLlave())
@@ -21,6 +23,7 @@ export function PanelLlaveSincronizacion() {
   const [llaveNueva, setLlaveNueva] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [errorGenerar, setErrorGenerar] = useState('')
+  const esElSuperadmin = useSesionStore((estado) => esSuperadmin(estado.usuarioActivo?.tipo_usuario))
 
   const hayLlave = hayLlaveConfigurada()
 
@@ -59,6 +62,10 @@ export function PanelLlaveSincronizacion() {
             'Pida al administrador la llave de sincronización (o escanee el enlace/QR que le comparta) ' +
             'y péguela en el campo de la llave.',
         )
+      } else if (causa instanceof ErrorRemoto && causa.estado === 403) {
+        setErrorGenerar(
+          'Solo la llave del administrador (SUPERADMIN) puede crear llaves para nuevos dispositivos.',
+        )
       } else {
         setErrorGenerar(causa instanceof Error ? causa.message : 'No se pudo crear la llave.')
       }
@@ -81,8 +88,8 @@ export function PanelLlaveSincronizacion() {
       {!hayLlave ? (
         <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
           Este dispositivo aún no tiene llave de sincronización. Sin ella, los datos no se
-          respaldan en la nube. Si aún no existen llaves, genere la primera con el botón
-          &quot;Generar llave&quot;.
+          respaldan en la nube: el administrador (SUPERADMIN) genera las llaves y se las
+          comparte a los demás dispositivos.
         </div>
       ) : null}
 
@@ -118,15 +125,23 @@ export function PanelLlaveSincronizacion() {
         </div>
       </div>
 
-      <Button
-        variante="primario"
-        tamanio="sm"
-        className="w-full"
-        icono={Key}
-        onClick={() => setPasoOnboarding('confirmar')}
-      >
-        {hayLlave ? 'Agregar dispositivo' : 'Generar llave'}
-      </Button>
+      {esElSuperadmin ? (
+        <Button
+          variante="primario"
+          tamanio="sm"
+          className="w-full"
+          icono={Key}
+          onClick={() => setPasoOnboarding('confirmar')}
+        >
+          {hayLlave ? 'Agregar dispositivo' : 'Generar llave'}
+        </Button>
+      ) : (
+        <div className="rounded-xl bg-sky-50 px-3 py-2 text-xs leading-snug text-sky-800">
+          Solo el administrador de la tienda ({NOMBRE_SUPERADMIN} · SUPERADMIN) genera las
+          llaves para nuevos dispositivos. Si necesita otra, pídasela y péguela en el campo
+          de arriba.
+        </div>
+      )}
 
       <Modal
         abierto={pasoOnboarding !== 'cerrado'}

@@ -105,6 +105,19 @@ describe('crearLlaveRemoto (arranque de la tienda)', () => {
     await expect(crearLlaveRemoto()).rejects.toThrow('Llave de sincronización inválida.')
   })
 
+  it('rechaza crear llave con una llave no maestra (solo SUPERADMIN)', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () =>
+        JSON.stringify({
+          error: 'Solo la llave del administrador (SUPERADMIN) puede crear llaves para nuevos dispositivos.',
+        }),
+    } as unknown as Response)
+
+    await expect(crearLlaveRemoto()).rejects.toThrow('Solo la llave del administrador')
+  })
+
   it('otras acciones sin llave local siguen fallando temprano', async () => {
     await expect(descargarRemoto()).rejects.toThrow('Falta la llave de sincronización')
     expect(fetch).not.toHaveBeenCalled()
