@@ -77,8 +77,20 @@ async function llaveValida(
 function jsonDatos(status: number, cuerpo: unknown): Response {
   return new Response(JSON.stringify(cuerpo), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Connection': 'keep-alive' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Connection': 'keep-alive',
+      ...CABECERAS_CORS,
+    },
   })
+}
+
+// Supabase enruta el preflight del navegador (OPTIONS) a la función; sin
+// responderlo con CORS el `fetch` del cliente falla "No se pudo conectar".
+const CABECERAS_CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'x-llave-sincronizacion, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +173,9 @@ async function manejarCrearLlave(
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CABECERAS_CORS })
+  }
   try {
     if (req.method !== 'GET' && req.method !== 'POST') {
       return jsonDatos(405, { error: 'Método no permitido.' })
