@@ -111,9 +111,11 @@ módulo de Resúmenes:
 - **Llave de sincronización** (se configura UNA vez por dispositivo, quien la
   tenga puede guardar y descargar los datos): abre el indicador de
   sincronización (arriba, a la derecha), escribe la llave que te entregó el
-  administrador y pulsa **Guardar**.
-- **Sincronizar:** sube los cambios pendientes (se hace solo cada 15 s con
-  conexión, este botón lo fuerza).
+  administrador y pulsa **Guardar**. Solo la cuenta de **superadministrador**
+  puede generar llaves nuevas para otros dispositivos: si necesitas una,
+  pídesela al dueño (te dará una de "agregar otro dispositivo").
+- **Sincronizar:** sube los cambios pendientes (en cuanto hay conexión se hace
+  solo, con reintentos; este botón lo fuerza).
 - **Subir todo:** respalda la base completa del dispositivo a la nube. Usadlo
   la primera vez para que otra computadora/celular pueda copiar los datos.
 - **Bajar todo (solo administrador):** fusiona la nube con este dispositivo.
@@ -128,6 +130,12 @@ módulo de Resúmenes:
 > Regla de conflictos: si un dato fue modificado en dos lugares, gana la
 > versión más reciente. Los importes se escriben en formato colombiano (punto
 > para miles y coma para decimales: "2.500" o "1.250,50").
+
+> Entrar en un dispositivo nuevo: puedes iniciar sesión con tu usuario y
+> contraseña **aunque todavía no tengas la llave** (la aplicación verifica tu
+> cuenta en la nube). La llave solo es necesaria para que los datos de la
+> tienda viajen entre dispositivos; pídela al administrador desde una sesión
+> ya iniciada.
 
 > Si la nube rechaza un dato (por ejemplo, un nombre de usuario que ya existe
 > en otro dispositivo), la aplicación deja de intentarlo y muestra el motivo en

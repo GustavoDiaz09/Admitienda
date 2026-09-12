@@ -40,8 +40,9 @@ src/controller/*               (Usuario/Producto/Movimiento/Session)
    ▼
 src/dao/*                      (Dexie por entidad; filtran eliminado)
    ▼
-src/lib/db.ts                  (Dexie: usuarios, productos, movimientos,
-                                solicitudes_admin, outbox, metadatos)
+src/lib/db.ts                  (Dexie v4: usuarios, productos, movimientos,
+                                solicitudes_admin, deudores, deudas,
+                                pagos_deuda, outbox, metadatos)
 ```
 
 - Los DAO escriben la fila **y** encolan la sincronización mediante
@@ -71,8 +72,17 @@ Cada tabla local comparte campos base (camelCase, de sincronización):
 | `eliminado`    | boolean | borrado lógico; se filtra en JS, **no es índice** |
 | `dispositivo`  | string  | tag del cliente que hace el cambio      |
 
-Tablas: `usuarios`, `productos`, `movimientos`, `solicitudes_admin` (+ `outbox`
-y `metadatos`).
+Tablas: `usuarios`, `productos`, `movimientos`, `solicitudes_admin`,
+`deudores`, `deudas`, `pagos_deuda` (+ `outbox` y `metadatos`).
+
+El CRM de deudas usa un **deudor único por nombre normalizado** (tabla maestra
+`deudores` con `&nombre_normalizado` en Dexie e índice único
+`lower(nombre_deudor)` en la nube, insensible a mayúsculas/espacios vía
+`normalizarNombreCliente`): un cliente puede tener **varias deudas pendientes a
+la vez**, todas señalando su `deudor_id`. Cada PagoDeuda apunta a una deuda.
+El esquema v4 de Dexie convierte las deudas antiguas (campo `cliente_nombre`)
+al nuevo modelo y **re-encola** a la outbox todo lo convertido para que la nube
+lo reciba.
 
 Reglas de negocio de integridad:
 
@@ -94,8 +104,9 @@ Reglas de negocio de integridad:
 ## 5. Sincronización (Supabase)
 
 - **Outbox:** clave `${tabla}:${registroId}`; `MAX_INTENTOS = 5`. El motor
-  (`src/sync/syncEngine.ts`) reacciona a `online`/`offline` y corre en intervalo
-  de 15 s: `sincronizarAhora()` sube los pendientes y actualiza el store Zustand
+  (`src/sync/syncEngine.ts`) reacciona a `online`/`offline` y **reintenta lo
+  pendiente cada `TIEMPO_REINTENTO_MS` (60 s)**: `sincronizarAhora()` sube los
+  pendientes y actualiza el store Zustand
   (`enLinea`, `pendientes`, `sincronizando`, `bajando`, `ultimaSync`, `error`).
 - **Bidireccional automático:** además del push del outbox, el motor baja cambios
   de la nube con `sincronizarBajando()` en el arranque, al volver a línea y como
@@ -103,15 +114,20 @@ Reglas de negocio de integridad:
   Solo opera si hay llave configurada (`hayLlaveConfigurada()`), hay conexión y
   no hay ya un push (`sincronizando`) ni un pull (`bajando`) en curso, para no
   solaparse. Los errores de segundo plano solo marcan `enLinea = false`.
-- **Pull incremental con cursor:** `traerDatosDelServidor({ completo? })`
-  (`src/sync/pull.ts`) baja solo lo modificado después del cursor
-  (`metadatos.ultima_descarga`, helpers `obtenerCursorDescarga()` /
-  `guardarCursorDescarga()`); sin cursor previo (o con `{ completo: true }`,
-  que usa la acción manual "Descargar todo" del ADMIN) baja la base completa.
-  El cursor se avanza a `Date.now()` **al inicio** de cada descarga, no al final:
-  cualquier fila tocada durante la bajada queda `> cursor` y se repite en el
-  siguiente ciclo (la fusión LWW es idempotente). El cursor vive en `metadatos`,
-  así que se borra junto con la base (nueva restauración).
+- **Pull incremental con cursor anclado al reloj del servidor:**
+  `traerDatosDelServidor({ completo? })` (`src/sync/pull.ts`) baja solo lo
+  modificado después del cursor (`metadatos.ultima_descarga`, helpers
+  `obtenerCursorDescarga()` / `guardarCursorDescarga()`); sin cursor previo (o
+  con `{ completo: true }`, que usa la acción manual "Descargar todo" del ADMIN)
+  baja la base completa. El cursor se deriva del **`ahora` que devuelve el
+  edge** en cada `descargar` menos `MARGEN_CURSOR_MS` (5 min), NUNCA del reloj
+  local: si el reloj del dispositivo va adelantado el incremental no se
+  congela, y si va atrasado no se re-descarga la base entera. Como red de
+  seguridad, cada `INTERVALO_RESCAN_MS` (24 h) se fuerza un rescaneo completo
+  para recuperar filas de dispositivos con reloj atrasado que el incremental
+  no volvería a ver. Si el sobre no trae `ahora`, se usa el reloj local como
+  respaldo. El cursor vive en `metadatos`, así que se borra junto con la base
+  (nueva restauración).
 - **Fusión LWW:** `aplicarRemotos()` fusiona las filas bajadas en la base local:
   en cada registro gana la versión más reciente (`actualizadoEn`, en empate
   `version`). Si gana la nube, la copia local se reemplaza **y se cancela** la
@@ -126,22 +142,44 @@ Reglas de negocio de integridad:
   los recompone al bajar.
 - **Transporte (Edge Function `sync`, `supabase/functions/sync/`):** la app
   no usa la clave anon. `src/lib/remoto.ts` llama a
-  `…/functions/v1/sync?accion=ping|descargar|subir` con la cabecera
-  `x-llave-sincronizacion`; la función valida la llave contra
+  `…/functions/v1/sync?accion=<ping|descargar|subir|hay_admin|crear_llave|login>`
+  con la cabecera
+  `x-llave-sincronizacion`; las acciones de **datos** (`descargar`, `subir`)
+  validan la llave contra
   `llaves_sincronizacion` (PBKDF2-HMAC-SHA-256, 210.000 iteraciones) y recién
-  entonces lee/escribe con service_role. La llave de cada dispositivo vive solo
-  en su `localStorage` (`src/lib/llave.ts`); se configura una vez en el panel
-  de sincronización. `llamar()` admite además query params
+  entonces leen/escriben con service_role. `hay_admin` también valida llave;
+  `login` y `crear_llave` (en modo arranque o con sesión de llaves) tienen sus
+  propias reglas (ver §6 y "Onboarding de llaves"). La llave de cada dispositivo
+  vive solo en su `localStorage` (`src/lib/llave.ts`); se configura una vez en
+  el panel de sincronización. `llamar()` admite además query params
   (`descargarRemoto(desde?)` pasa `desde` únicamente si `> 0`) y lanza
   `ErrorRemoto` con `estado` HTTP y `definitivo` (los 4xx no se reintentan).
+  Las respuestas expiran con `Access-Control-Allow-Origin: *` y el preflight
+  `OPTIONS` responde 204 (edge **v20**): sin ese CORS el `fetch` del navegador
+  fallaría "No se pudo conectar con la nube".
+- **Onboarding de llaves (maestras y subordinadas):** el **arranque** (ninguna
+  llave en la nube) permite a `crear_llave` crear la primera **llave maestra**
+  del dueño; a partir de ahí, generar una llave nueva para otro dispositivo
+  exige una llave **maestra** (la del SUPERADMIN) — una llave **subordinada**
+  sincroniza datos pero no genera más llaves (403 del edge). El inicio de
+  sesión híbrido del SUPERADMIN en un dispositivo sin llave la **auto-enrola**
+  como maestra (por eso una instalación termina con varias llaves maestras del
+  mismo dueño). `es_llave_maestra boolean` en `llaves_sincronizacion`,
+  backfill de las existentes a `true` (migración `llaves_maestra_solo_superadmin`).
 - **Validación de carga en la nube:** la acción `subir` valida cada lote antes
   de tocar la BD — numerosos campos por tabla (allow-list `ESQUEMAS` en la
-  Edge Function), tipos/rangos/enumerados espejo del cliente (`esMonto` exige
+  Edge Function, espejo del cliente), tipos/rangos/enumerados
+  (`esMonto` exige
   hasta 2 decimales), formato de fechas `yyyy-MM-dd HH:mm`, UIDs válidos,
   `version >= 1` y límites por petición (`MAX_FILAS`, `MAX_TAMANO_CUERPO`).
   Un lote inválido responde **400** con el id de la fila y el campo; uno que
   excede límites responde **413**; una violación de unicidad sigue en **409**.
-  Nada basura puede entrar a la fuente compartida que cada dispositivo fusiona.
+  Además se rechazan con **400** las filas cuyo `actualizado_en` supere
+  `Date.now() + 48 h` (`MARGEN_FUTURO_MS`): un reloj adelantado no puede ganar
+  LWW para siempre (el `creado_en` no se toca, es inmutable). Ningún
+  `error.message` interno se filtra a las respuestas (solo `console.error`
+  server-side), para no revelar esquema. Nada basura puede entrar a la fuente
+  compartida que cada dispositivo fusiona.
 - **Esquema remoto:** `supabase/migracion.sql` crea las 7 tablas espejo
   (PK `id uuid`, blanco del `onConflict`) y `llaves_sincronizacion`. El acceso
   de `anon`/`authenticated` está revocado y RLS activado sin políticas abiertas,
@@ -175,40 +213,69 @@ Reglas de negocio de integridad:
   re-subirían).
 - **Descarga paginada e incremental en la nube:** la acción `descargar` de la
   Edge Function itera con `.order('id').range(...)` en lotes de 1000 para no
-  truncar tablas grandes; si viene el query param `desde` (epoch ms finito y
-  `> 0`) aplica `.gt('actualizado_en', desde)` para devolver solo lo cambiado
-  desde el cursor del dispositivo. Sin `desde` devuelve la tabla completa
-  (restauración). El botón "Descargar todo" (panel de sync y Resúmenes) pide
-  confirmación y fusiona la nube con el dispositivo sin descartar datos locales.
+  truncar tablas grandes y acumula con un tope de `MAX_FILAS_DESCARGAR`
+  (50.000): si un respaldo completo lo supera responde **413** (el cliente lo
+  trata como transitorio y reintenta la bajada). Si viene el query param
+  `desde` (epoch ms finito y `> 0`) aplica `.gt('actualizado_en', desde)` para
+  devolver solo lo cambiado desde el cursor del dispositivo. Sin `desde`
+  devuelve la tabla completa (restauración). El botón "Descargar todo" (panel
+  de sync y Resúmenes) pide confirmación y fusiona la nube con el dispositivo
+  sin descartar datos locales.
 - Fin de descarga manual: evento `datos:sincronizados` en `window` para que las
   vistas recarguen.
 
 ## 6. Autenticación
 
-- **100 % local**: `hash = pbkdf2$<iteraciones>$hex(<PBKDF2-HMAC-SHA-256>)` de
+- **Hashes PBKDF2**: `hash = pbkdf2$<iteraciones>$hex(<PBKDF2-HMAC-SHA-256>)` de
   `contraseña + salt` con Web Crypto (`src/lib/password.ts`, 210.000
   iteraciones). Los hashes legacy SHA-256 (formato Java) se siguen verificando
   y se **re-hashan con PBKDF2 la primera vez que el usuario inicia sesión**
   (migración progresiva).
-- Sesión en store Zustand + sessionStorage (`sistematienda.sesion`), restaurada
-  con `restaurarSesion()` al arrancar. `RequiereSesion`/`SoloAdministrador`/
+- **Login híbrido "nube primero, local de respaldo":** `iniciarSesion`
+  (`UsuarioController`, tercer parámetro inyectable `verificarLoginRemoto`)
+  consulta primero la acción `login` del edge (validación sin enumerar:
+  400 `credencialesIncorrectas`, 429 por rate-limit best-effort en memoria del
+  edge: 5 fallos → 30 s que se duplican, tope 24 h). Si la nube responde,
+  siembra la cuenta localmente (`pull.sembrarUsuarioDeSesion`, que desaloja un
+  fantasma local que ocupe el `&nombre_usuario`), guarda la llave del dueño si
+  viene en la respuesta, y dispara la sincronización solo si hay llave
+  configurada. Si la nube está caída o sin red, cae al login local (IndexedDB,
+  verificación de hash). Así un usuario de la tienda entra en un dispositivo
+  nuevo **sin depender de la llave**; la llave solo gobierna la sincronización
+  de datos (`descargar`/`subir`). El routeo y la sesión: sesión en store
+  Zustand + sessionStorage (`sistematienda.sesion`), restaurada con
+  `restaurarSesion()` al arrancar; `RequiereSesion`/`SoloAdministrador`/
   `SoloConCuenta` protegen las rutas; invitado navega sin sesión a productos.
-- Roles: `TIPO_ADMIN` (edita todo), `TIPO_SUPERADMIN` (cuenta única del dueño,
-  por encima del admin: `esRolAdministrativo` lo incluye en cada guarda; da y
-  quita el rol de administrador con `UsuarioController.cambiarRolDeUsuario` y
-  puede eliminar administradores incluso al último, mientras que su propia
+- **Roles:** `TIPO_ADMIN` (edita todo), `TIPO_SUPERADMIN` (cuenta única del
+  dueño, por encima del admin: `esRolAdministrativo` lo incluye en cada guarda;
+  da y quita el rol de administrador con `UsuarioController.cambiarRolDeUsuario`
+  y puede eliminar administradores incluso al último, mientras que su propia
   cuenta es inamovible: no se elimina, no se renombra y no cambia de rol),
   `TIPO_REGISTRADO` (solo lectura en resumen/productos/movimientos/deudas) e
-  `INVITADO` (solo consulta productos). Guardas en
-  `src/App.tsx`: `SoloAdministrador` en usuarios/alertas;
-  `SoloConCuenta` en movimientos/resumenes/deudas; los botones de modificación
-  se ocultan
-  según `esAdmin` en las vistas. Solicitudes de permiso en `solicitudes_admin`
-  (pendiente/aprobada/rechazada). El rol SUPERADMIN se otorga una sola vez en
-  la nube (migración `superadmin_unico_y_promocion_dueno`: índice único parcial
+  `INVITADO` (solo consulta productos). Guardas en `src/App.tsx`:
+  `SoloAdministrador` en usuarios/alertas; `SoloConCuenta` en
+  movimientos/resumenes/deudas; los botones de modificación se ocultan según
+  `esAdmin`/`esRolAdministrativo` en las vistas. Solicitudes de permiso en
+  `solicitudes_admin` (pendiente/aprobada/rechazada). El rol SUPERADMIN se
+  otorga una sola vez en la nube (migración
+  `superadmin_unico_y_promocion_dueno`: índice único parcial
   `uq_usuarios_superadmin` + UPDATE de la cuenta del dueño); la Edge Function
   valida que el SUPERADMIN solo corresponda a esa cuenta fija, que jamás se
   tumbe y que el nombre del dueño no se pueda subir con otro rol.
+- **Fuerza bruta con backoff exponencial:** `src/lib/intentos.ts` aplica
+  `MarcoBloqueo` (`'indicio' | 'login'`) persistido en localStorage: a partir
+  del fallo que cruza `MAX_INTENTOS_FALLIDOS` (5) la espera se duplica por
+  cada fallo adicional (`ESPERA_INICIAL_MS` 30 s, tope `ESPERA_MAXIMA_MS`
+  24 h); el registro se limpia al acertar y un bloqueo vencido se descarta.
+  `iniciarSesion` y `verificarIndicio`/`restablecerContrasena` lo consultan
+  antes de verificar (y los fallos se registran también cuando el usuario no
+  existe, para no enumerar); `Login.tsx` y `RecuperarContrasena.tsx` muestran
+  el tiempo restante con `formatearEspera()` y deshabilitan el botón.
+- **Cambiar contraseña y recuperación:** `UsuarioController.cambiarContrasena`
+  (modal `CambiarContrasena.tsx` en la barra lateral) exige la contraseña
+  actual, longitud mínima y que la nueva sea distinta; aplica la nueva
+  sal/hash vía outbox (sincroniza a la nube). La recuperación
+  (`RecuperarContrasena`) verifica el `indicio_usuario` registrado.
 - **Decisión global del administrador (AL-05):** el primer admin no se decide
   por dispositivo. Al registrarse, `UsuarioController` consulta la Edge
   Function (`accion=hay_admin`) y solo promueve si la nube confirma que NO hay
@@ -216,15 +283,15 @@ Reglas de negocio de integridad:
   llave / sin conexión), el usuario queda `REGISTRADO` y su solicitud queda
   pendiente de aprobación. (`verificarAdminRemoto` se inyecta en los tests.)
 - Campo de seguridad: cada usuario registra **palabras clave** (`indicio_usuario`)
-  que se usan en el flujo de recuperación (`RecuperarContrasena`). En el
-  registro y edición de usuario se muestra la advertencia de que deben ser
-  personales y no evidentes.
+  que se usan en el flujo de recuperación. En el registro y edición de usuario
+  se muestra la advertencia de que deben ser personales y no evidentes; el
+  registro incluye además un campo para confirmar la contraseña.
 
 ## 7. Routing, layout y diseño
 
 - Rutas en `src/App.tsx`: públicas `/ingreso`, `/registro`, `/recuperar`;
-  protegidas con `SoloAdministrador` (movimientos, usuarios, alertas y resumen
-  solo para admin en versiones previas) o `SoloConCuenta` (resumenes y deudas,
+  protegidas con `SoloAdministrador` (usuarios y alertas, para roles
+  administrativos) o `SoloConCuenta` (movimientos, resumenes y deudas,
   visibles en lectura para cualquier usuario con cuenta); `productos` abierta a
   todos (lectura sin sesión). Index redirige por rol, con invitados a
   `productos`. Views cargadas con `React.lazy` + `Suspense` (code-splitting por
@@ -241,20 +308,20 @@ Reglas de negocio de integridad:
 
 - `npm.cmd run lint` (oxlint), `npx.cmd tsc -b`, `npm.cmd test` (Vitest +
   fake-indexeddb), `npm.cmd run build`.
-- Smoke tests en `src/test/inicializacion.test.ts`: arranque con la BD vacía
-  (sin cuentas ni datos por defecto), promoción del primer usuario registrado a
-  administrador, registros que quedan como REGISTRADO cuando ya hay admin,
-  seguridad de promoción (solicitud pendiente, no segundo admin directo), alta
-  de ingreso con efecto en resúmenes y rechazo de datos inválidos.
-  `src/test/deudas.test.ts` prueba el CRM de deudas sobre BD aislada.
-  `src/test/validaciones.test.ts` y `fechas.test.ts` cubren `normalizarMonto` y
-  el round-trip UTC de Colombia; `resumen.test.ts` valida la semana en hora de
-  Colombia; `pull.test.ts` cubre la fusión LWW (nube más reciente, local más
-  reciente, empate y tumbas) contra la outbox y el cursor de descarga
-  incremental (`obtenerCursorDescarga`/`guardarCursorDescarga`).
-  `outbox.test.ts` cubre también `descartarItem` (rechazo definitivo) y
-  `remoto.test.ts` la clasificación de `ErrorRemoto` (4xx definitivo vs
-  transitorio).
+- Batería actual: **168/168 tests** (19 archivos) que cubren los módulos
+  críticos y aíslan la red/BD con `fake-indexeddb`, `vi.mock` e inyección de
+  dependencias: `inicializacion` (arranque BD vacía, primer admin global),
+  `pull` (fusión LWW contra outbox + cursor anclado al reloj del servidor +
+  rescaneo 24 h + reemplazo de "fantasmas" por unicidad), `remoto`/`errores-sync`
+  (clasificación 4xx/5xx, llave inválida sin descartar, configuración de llave),
+  `llave`, `login-remoto` (login híbrido con `fetch` stubeado y desalojo del
+  fantasma), `deudas`/`deuda-historial` (deudor único normalizado, abono
+  atómico, edición con recálculo de saldo), `solicitudes` (promoción y
+  eliminación de usuario atómicas), `superadmin` (reglas del rol del dueño),
+  `intentos` (backoff de login e indicio), `outbox` (descartarItem),
+  `almacenamiento` (persistencia y umbral de cuota), `cambiar-contrasena`,
+  `esquemas` (contrato cliente↔edge por tabla), `validaciones` (montos es-CO,
+  >2 decimales rechazados), `fechas`/`resumen` (UTC-5), `password`.
 - PWA: `vite-plugin-pwa` genera `sw.js` (offline) y `manifest.webmanifest`
   (íconos SVG en `public/`, theme `#18181b`).
 
@@ -262,10 +329,20 @@ Reglas de negocio de integridad:
 
 - Exportación CSV/PDF y gráfico SVG en Resúmenes son ideas futuras sin
   implementar.
-- La migración remota (`supabase/migracion.sql`) se aplica con una sesión del
-  MCP de Supabase o pegando el archivo en el SQL Editor del proyecto.
+- El auto-enrolamiento crea **una llave maestra nueva por cada login del
+  SUPERADMIN sin llave válida**: es operativo por diseño, pero a futuro se
+  puede deduplicar por dispositivo o limpiar llaves huérfanas.
+- `tsconfig.app.json` no tiene `strict: true` (endurecimiento pendiente; tocar
+  con cuidado).
+- Bundle único ~610 kB > 500 kB (warning de build): code-splitting opcional.
+- `solicitudes_admin.usuario_id` y `pagos_deuda.deuda_id` son `text` en la BD
+  (antes los FK reales no existían; el uuid se valida en el edge). Benigno.
+- La migración remota (`supabase/migracion.sql`, 8 tablas) se aplica con una
+  sesión del MCP de Supabase o pegando el archivo en el SQL Editor del
+  proyecto.
 - La Edge Function `sync` se despliega con el MCP de Supabase
   (`supabase_deploy_edge_function`, `verify_jwt=false`; el código del repo es
-  la fuente de verdad) y se prueba vía HTTP: `ping` con llave válida debe
-  responder 200, con llave inválida/ausente 401, y el acceso REST directo con
+  la fuente de verdad) y se prueba vía HTTP: `login` con contraseña mala debe
+  responder 400, `descargar`/`subir`/`hay_admin`/`crear_llave` con llave
+  inválida/ausente 401, `OPTIONS` 204 con CORS, y el acceso REST directo con
   la clave anon debe quedar en 401.

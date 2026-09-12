@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 AGENTS.md
+docs/POR_QUE_ASI.md
 
 # Logs
 logs

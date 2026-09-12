@@ -50,8 +50,16 @@ No existen credenciales ni datos por defecto: cada cuenta se crea desde
 de administrador; las siguientes quedan como usuarios registrados (solo lectura
 hasta que un administrador apruebe su permiso). El **rol SUPERADMIN** no se
 registra: es la cuenta única del dueño, promovida una sola vez en la nube
-( migración `superadmin_unico_y_promocion_dueno`) y distribuida a todos los
+(migración `superadmin_unico_y_promocion_dueno`) y distribuida a todos los
 dispositivos por sincronización.
+
+**Inicio de sesión híbrido:** un dispositivo nuevo puede entrar con su usuario y
+contraseña **sin tener aún la llave** (la aplicación pregunta primero a la nube;
+si responde, siembra la cuenta localmente y guarda la llave del dueño cuando
+viene; si la nube está caída, cae al inicio de sesión local). La **llave de
+sincronización** solo se necesita para que los datos de la tienda viajen entre
+dispositivos; solo el SUPERADMIN puede generar llaves nuevas para otros
+dispositivos.
 
 ## Roles
 
@@ -94,9 +102,13 @@ sistematienda-web/
 - La **base local es la fuente de la verdad**; Supabase se usa solo para
   intercambiar datos, **a través de la Edge Function `sync`** que exige la
   llave de sincronización de cada dispositivo (configurable en el panel de
-  sincronización; se guarda solo en el propio dispositivo).
+  sincronización; se guarda solo en el propio dispositivo). El inicio de sesión
+  en un dispositivo nuevo verifica primero en la nube y solo usa la llave para
+  sincronizar los datos.
 - Los cambios se registran en una cola (outbox) y un motor los sube en cuanto
-  hay conexión (eventos del navegador + intervalo de 15 s); hasta 5 intentos.
+  hay conexión (eventos del navegador + reintento cada 60 s, hasta 5 intentos);
+  los datos nuevos que otros dispositivos subieron se bajan solos al arrancar,
+  al volver a estar en línea y aproximadamente cada 30 s.
 - Conflicto entre versiones: gana la modificación más reciente ("último write
   gana").
 - El administrador ve el panel de sincronización (estado, pendientes y última
@@ -121,6 +133,10 @@ sistematienda-web/
    deja `verify_jwt` desactivado: la autenticación la hace la propia llave.
 4. Crea la primera llave insertando su hash PBKDF2 en `llaves_sincronizacion`
    (la llave en claro se entrega solo al administrador). En cada dispositivo,
-   el propietario la escribe en el panel de sincronización.
-5. Abre la app en un segundo dispositivo con la misma URL y usa **bajar todo**
-   (admin) para traer los datos.
+   el propietario la escribe en el panel de sincronización. Lo más cómodo:
+   con la BD de llaves vacía la acción `crear_llave` arranca por sí sola (la
+   primera llave queda como maestra del dueño) y, cuando el SUPERADMIN inicia
+   sesión en un dispositivo sin llave, esta se **auto-enrola** sola.
+5. Abre la app en un segundo dispositivo con la misma URL: quien entre con su
+   cuenta (login híbrido) llega así; un administrador puede usar **bajar todo**
+   para traer los datos.
