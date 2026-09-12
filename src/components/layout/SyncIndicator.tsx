@@ -8,6 +8,7 @@ import {
   ArrowsClockwise,
   X,
 } from '@phosphor-icons/react'
+import { VERSION_APP } from '../../lib/version'
 import { useSesionStore } from '../../controller/SessionController'
 import { esRolAdministrativo } from '../../model/types'
 import { horaCorta } from '../../lib/formato'
@@ -265,6 +266,9 @@ export function SyncIndicator() {
                 <PanelLlaveSincronizacion />
               </div>
             </div>
+            <p className="mt-4 border-t border-zinc-100 pt-3 text-center text-[11px] text-zinc-400">
+              AdmiTienda · versión {VERSION_APP}
+            </p>
           </div>
           </div>,
           document.body,
